@@ -305,6 +305,54 @@ export function formatGateReportMarkdown(report: GateReport): string {
   return `${lines.join("\n")}\n`;
 }
 
+export function formatSamorevReviewNote(report: GateReport): string {
+  const lines = [
+    "## samorev review note: samotest",
+    "",
+    `Status: \`${report.gate.status}\``,
+    `Checked: ${report.gate.checked_at}`,
+    `Head: \`${report.gate.head_sha ?? "unknown"}\``,
+    `Summary: ${report.gate.summary.passed} passed, ${report.gate.summary.failed} failed, ${report.gate.summary.warned} warned, ${report.gate.summary.waived} waived`,
+    `Manifest: ${formatManifestReference(report)}`,
+    "",
+    "### Scenario evidence",
+  ];
+
+  if (report.scenarios.length === 0) {
+    lines.push("- No scenario evidence was available.");
+  }
+
+  for (const scenario of report.scenarios) {
+    lines.push(
+      `- \`${scenario.id}\`: \`${scenario.status}\` (${scenario.required ? "required" : "optional"}, ${scenario.fresh ? "fresh" : "stale"})`,
+      `  - Reason: ${scenario.reason}`,
+      `  - Evidence: ${formatSamorevEvidence(scenario.artifacts)}`,
+    );
+  }
+
+  if (report.errors.length > 0) {
+    lines.push("", "### Gate errors");
+    for (const error of report.errors) {
+      const scenario = error.scenario_id ? ` for \`${error.scenario_id}\`` : "";
+      lines.push(`- \`${error.code}\`${scenario}: ${error.message}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "<details>",
+    "<summary>samotest gate check JSON</summary>",
+    "",
+    "```json",
+    JSON.stringify(report, null, 2),
+    "```",
+    "",
+    "</details>",
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
 async function artifactUrlErrors(
   manifest: EvidenceManifest,
   required: boolean,
@@ -493,6 +541,29 @@ function formatArtifactLink(artifact: EvidenceArtifact): string {
   }
 
   return escapeTableCell(artifact.path);
+}
+
+function formatManifestReference(report: GateReport): string {
+  if (isNonEmptyString(report.gate.manifest_url)) {
+    return `[manifest](${report.gate.manifest_url})`;
+  }
+
+  return `\`${report.gate.manifest_path}\``;
+}
+
+function formatSamorevEvidence(artifacts: EvidenceArtifact[]): string {
+  if (artifacts.length === 0) {
+    return "none";
+  }
+
+  return artifacts.map((artifact) => {
+    const label = artifact.name || artifact.path;
+    if (isNonEmptyString(artifact.url)) {
+      return `[${label}](${artifact.url})`;
+    }
+
+    return `missing URL for \`${artifact.path}\``;
+  }).join("; ");
 }
 
 function escapeTableCell(value: string): string {

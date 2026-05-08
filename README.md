@@ -77,6 +77,8 @@ samotest gate check --manifest samples/evidence/sprint1-cli-smoke/manifest.json 
 
 The committed sample manifest uses immutable raw GitHub URLs so this local quickstart can pass before the package is published. For real PR/MR review evidence, required artifacts still need provider-uploaded, reviewer-accessible URLs; local file paths alone are not enough for the gate.
 
+The exact `samorev` invocation, exit-code contract, and review note shape are documented in [docs/samorev-integration.md](docs/samorev-integration.md). A complete sample review note lives at [samples/samorev/review-note.md](samples/samorev/review-note.md).
+
 Package or report evidence:
 
 ```sh
