@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { access, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,9 @@ export interface RunCliOptions {
   resolveArtifactUrl?: (url: string) => Promise<boolean>;
   recorderDoctor?: () => Promise<RecorderDoctorResult>;
   screenshotRecorder?: ScreenshotRecorder;
+  videoRecorder?: VideoRecorder;
+  gifConverter?: GifConverter;
+  castRecorder?: CastRecorder;
   now?: () => Date;
 }
 
@@ -36,6 +39,8 @@ export interface RecorderAvailability {
 
 export interface RecorderDoctorResult {
   screenshot: RecorderAvailability;
+  video: RecorderAvailability;
+  gif: RecorderAvailability;
   cast: RecorderAvailability;
 }
 
@@ -49,6 +54,36 @@ export interface ScreenshotRecorderResult {
 }
 
 export type ScreenshotRecorder = (input: ScreenshotRecorderInput) => Promise<ScreenshotRecorderResult>;
+
+export interface VideoRecorderInput {
+  url: string;
+  outputPath: string;
+}
+
+export interface VideoRecorderResult {
+  browser?: string;
+}
+
+export type VideoRecorder = (input: VideoRecorderInput) => Promise<VideoRecorderResult>;
+
+export interface GifConverterInput {
+  videoPath: string;
+  outputPath: string;
+}
+
+export type GifConverter = (input: GifConverterInput) => Promise<void>;
+
+export interface CastRecorderInput {
+  command: string;
+  outputPath: string;
+  cwd: string;
+}
+
+export interface CastRecorderResult {
+  tool?: string;
+}
+
+export type CastRecorder = (input: CastRecorderInput) => Promise<CastRecorderResult>;
 
 const sprintCommands = [
   "samotest init",
@@ -420,14 +455,6 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     };
   }
 
-  if (parsed.format !== "screenshot") {
-    return {
-      exitCode: 2,
-      stdout: "",
-      stderr: `${parsed.format} recording is not implemented in this slice. Use an external recorder and attach the artifact with samotest run, or check availability with samotest doctor.\n`,
-    };
-  }
-
   const loaded = await loadScenario(cwd, parsed.scenarioId);
   if (!loaded.ok) {
     return {
@@ -437,24 +464,43 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     };
   }
 
+  if (parsed.format === "cast") {
+    return recordCastEvidence({ cwd, parsed, scenario: loaded.scenario, options });
+  }
+
   const url = findBrowserScenarioUrl(loaded.scenario);
   if (!url) {
     return {
       exitCode: 3,
       stdout: "",
-      stderr: `Scenario ${loaded.scenario.id} does not define a browser URL for screenshot recording.\n`,
+      stderr: `Scenario ${loaded.scenario.id} does not define a browser URL for ${parsed.format} recording.\n`,
     };
   }
 
-  if (!options.screenshotRecorder) {
-    const doctor = options.recorderDoctor ? await options.recorderDoctor() : await detectRecorderAvailability();
-    if (!doctor.screenshot.available) {
-      return {
-        exitCode: 2,
-        stdout: "",
-        stderr: `Screenshot recorder unavailable: ${doctor.screenshot.detail}\n`,
-      };
-    }
+  const needsDoctor =
+    (parsed.format === "screenshot" && !options.screenshotRecorder) ||
+    ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder) ||
+    (parsed.format === "gif" && !options.gifConverter);
+  const doctor = needsDoctor
+    ? options.recorderDoctor
+      ? await options.recorderDoctor()
+      : await detectRecorderAvailability()
+    : null;
+
+  if (parsed.format === "screenshot" && !options.screenshotRecorder && !doctor?.screenshot.available) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Screenshot recorder unavailable: ${doctor?.screenshot.detail ?? "Playwright is unavailable."}\n`,
+    };
+  }
+
+  if ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder && !doctor?.video.available) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Video recorder unavailable: ${doctor?.video.detail ?? "Playwright video recording is unavailable."}\n`,
+    };
   }
 
   const now = options.now ? options.now() : new Date();
@@ -462,19 +508,79 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
   const outputRoot = isAbsolute(parsed.output) ? parsed.output : join(cwd, parsed.output);
   const runDir = join(outputRoot, runId);
   const artifactsDir = join(runDir, "artifacts");
-  const screenshotPath = join(artifactsDir, "screenshot.png");
 
   await mkdir(artifactsDir, { recursive: true });
-  const recorder = options.screenshotRecorder ?? recordScreenshotWithPlaywright;
-  let recorderResult: ScreenshotRecorderResult;
-  try {
-    recorderResult = await recorder({ url, outputPath: screenshotPath });
-  } catch (error) {
-    return {
-      exitCode: 2,
-      stdout: "",
-      stderr: `Screenshot recorder failed: ${formatError(error)}\n`,
-    };
+
+  const artifacts: Array<{ type: string; name: string; path: string }> = [];
+  let browser = "playwright";
+  let stdoutPrefix = `Recorded ${parsed.format} evidence ${runId}`;
+  let note = `Captured browser ${parsed.format} for ${url}.`;
+
+  if (parsed.format === "screenshot") {
+    const screenshotPath = join(artifactsDir, "screenshot.png");
+    const recorder = options.screenshotRecorder ?? recordScreenshotWithPlaywright;
+    let recorderResult: ScreenshotRecorderResult;
+    try {
+      recorderResult = await recorder({ url, outputPath: screenshotPath });
+    } catch (error) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `Screenshot recorder failed: ${formatError(error)}\n`,
+      };
+    }
+    browser = recorderResult.browser ?? "playwright";
+    artifacts.push({
+      type: "screenshot",
+      name: `${loaded.scenario.id}-screenshot`,
+      path: screenshotPath,
+    });
+  }
+
+  if (parsed.format === "video" || parsed.format === "gif") {
+    const videoPath = join(artifactsDir, "video.webm");
+    const recorder = options.videoRecorder ?? recordVideoWithPlaywright;
+    let recorderResult: VideoRecorderResult;
+    try {
+      recorderResult = await recorder({ url, outputPath: videoPath });
+    } catch (error) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `Video recorder failed: ${formatError(error)}\n`,
+      };
+    }
+    browser = recorderResult.browser ?? "chromium";
+    artifacts.push({
+      type: "video",
+      name: `${loaded.scenario.id}-video`,
+      path: videoPath,
+    });
+
+    if (parsed.format === "gif") {
+      if (!options.gifConverter && !doctor?.gif.available) {
+        stdoutPrefix = `GIF conversion unavailable: ${doctor?.gif.detail ?? "ffmpeg is unavailable."}\nRecorded video fallback evidence ${runId}`;
+        note = `Captured browser video fallback for ${url}; GIF conversion was unavailable.`;
+      } else {
+        const gifPath = join(artifactsDir, "animation.gif");
+        const converter = options.gifConverter ?? convertVideoToGifWithFfmpeg;
+        try {
+          await converter({ videoPath, outputPath: gifPath });
+        } catch (error) {
+          return {
+            exitCode: 2,
+            stdout: "",
+            stderr: `GIF conversion failed: ${formatError(error)}\n`,
+          };
+        }
+        artifacts.push({
+          type: "gif",
+          name: `${loaded.scenario.id}-gif`,
+          path: gifPath,
+        });
+        stdoutPrefix = `Recorded gif evidence ${runId}`;
+      }
+    }
   }
 
   const finishedAt = (options.now ? options.now() : new Date()).toISOString();
@@ -494,28 +600,111 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     },
     environment: {
       os: platform(),
-      browser: recorderResult.browser ?? "playwright",
+      browser,
       redacted: true,
     },
-    artifacts: [
-      {
-        type: "screenshot",
-        name: `${loaded.scenario.id}-screenshot`,
-        path: screenshotPath,
-      },
-    ],
+    artifacts,
     observations: [
       {
         step_id: firstStepId(loaded.scenario),
         status: "passed",
-        note: `Captured browser screenshot for ${url}.`,
+        note,
       },
     ],
   });
 
   return {
     exitCode: 0,
-    stdout: `Recorded screenshot evidence ${runId} at ${join(parsed.output, runId, "manifest.json")}\n`,
+    stdout: `${stdoutPrefix} at ${join(parsed.output, runId, "manifest.json")}\n`,
+    stderr: "",
+  };
+}
+
+async function recordCastEvidence(input: {
+  cwd: string;
+  parsed: RecordCommandArgs;
+  scenario: ScenarioDefinition;
+  options: RunCliOptions;
+}): Promise<CliResult> {
+  const command = findTerminalScenarioCommand(input.scenario);
+  if (!command) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: `Scenario ${input.scenario.id} does not define a terminal command for cast recording.\n`,
+    };
+  }
+
+  if (!input.options.castRecorder) {
+    const doctor = input.options.recorderDoctor ? await input.options.recorderDoctor() : await detectRecorderAvailability();
+    if (!doctor.cast.available) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `Cast recorder unavailable: ${doctor.cast.detail}\n`,
+      };
+    }
+  }
+
+  const now = input.options.now ? input.options.now() : new Date();
+  const runId = input.parsed.runId ?? `record-${now.toISOString().replace(/[:.]/g, "-")}`;
+  const outputRoot = isAbsolute(input.parsed.output) ? input.parsed.output : join(input.cwd, input.parsed.output);
+  const runDir = join(outputRoot, runId);
+  const artifactsDir = join(runDir, "artifacts");
+  const castPath = join(artifactsDir, "terminal.cast");
+
+  await mkdir(artifactsDir, { recursive: true });
+  const recorder = input.options.castRecorder ?? recordCastWithAsciinema;
+  let recorderResult: CastRecorderResult;
+  try {
+    recorderResult = await recorder({ command, outputPath: castPath, cwd: input.cwd });
+  } catch (error) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Cast recorder failed: ${formatError(error)}\n`,
+    };
+  }
+
+  const finishedAt = (input.options.now ? input.options.now() : new Date()).toISOString();
+  const commit = await currentCommit(input.cwd);
+  await writeEvidenceManifest({
+    runDir,
+    run: {
+      id: runId,
+      scenario_id: input.scenario.id,
+      status: "passed",
+      started_at: now.toISOString(),
+      finished_at: finishedAt,
+      required: input.scenario.priority === "required",
+    },
+    source: {
+      commit,
+    },
+    environment: {
+      os: platform(),
+      terminal_recorder: recorderResult.tool ?? "asciinema",
+      redacted: true,
+    },
+    artifacts: [
+      {
+        type: "cast",
+        name: `${input.scenario.id}-cast`,
+        path: castPath,
+      },
+    ],
+    observations: [
+      {
+        step_id: firstStepId(input.scenario),
+        status: "passed",
+        note: `Captured terminal cast for configured command.`,
+      },
+    ],
+  });
+
+  return {
+    exitCode: 0,
+    stdout: `Recorded cast evidence ${runId} at ${join(input.parsed.output, runId, "manifest.json")}\n`,
     stderr: "",
   };
 }
@@ -1115,18 +1304,22 @@ function formatDoctorOutput(result: RecorderDoctorResult): string {
 }
 
 async function detectRecorderAvailability(): Promise<RecorderDoctorResult> {
-  const [screenshot, cast] = await Promise.all([
-    detectPlaywrightScreenshotSupport(),
+  const [screenshot, video, gif, cast] = await Promise.all([
+    detectPlaywrightBrowserSupport("screenshots"),
+    detectPlaywrightBrowserSupport("video"),
+    detectFfmpegSupport(),
     detectAsciinemaSupport(),
   ]);
 
   return {
     screenshot,
+    video,
+    gif,
     cast,
   };
 }
 
-async function detectPlaywrightScreenshotSupport(): Promise<RecorderAvailability> {
+async function detectPlaywrightBrowserSupport(capability: "screenshots" | "video"): Promise<RecorderAvailability> {
   try {
     const playwright = await importOptionalPackage("playwright");
     const browser = await playwright.chromium.launch({ headless: true });
@@ -1134,13 +1327,31 @@ async function detectPlaywrightScreenshotSupport(): Promise<RecorderAvailability
     return {
       available: true,
       tool: "Playwright",
-      detail: "Chromium browser can launch for screenshots.",
+      detail: `Chromium browser can launch for ${capability}.`,
     };
   } catch (error) {
     return {
       available: false,
       tool: "Playwright",
       detail: `Install playwright and a browser with \`npm install -D playwright && npx playwright install chromium\`. Detected error: ${formatError(error)}`,
+    };
+  }
+}
+
+async function detectFfmpegSupport(): Promise<RecorderAvailability> {
+  try {
+    const { stdout, stderr } = await execFileAsync("ffmpeg", ["-version"]);
+    const firstLine = (stdout || stderr).split(/\r?\n/, 1)[0]?.trim();
+    return {
+      available: true,
+      tool: "ffmpeg",
+      detail: firstLine || "ffmpeg is on PATH.",
+    };
+  } catch {
+    return {
+      available: false,
+      tool: "ffmpeg",
+      detail: "Install ffmpeg to convert Playwright browser videos to GIF; `record --format gif` will fall back to video when browser recording is available.",
     };
   }
 }
@@ -1157,7 +1368,7 @@ async function detectAsciinemaSupport(): Promise<RecorderAvailability> {
     return {
       available: false,
       tool: "asciinema",
-      detail: "Install asciinema to record terminal casts; cast generation is detected but stubbed in this slice.",
+      detail: "Install asciinema to record terminal casts.",
     };
   }
 }
@@ -1176,6 +1387,64 @@ async function recordScreenshotWithPlaywright(input: ScreenshotRecorderInput): P
 
   return {
     browser: "chromium",
+  };
+}
+
+async function recordVideoWithPlaywright(input: VideoRecorderInput): Promise<VideoRecorderResult> {
+  const playwright = await importOptionalPackage("playwright");
+  const browser = await playwright.chromium.launch({ headless: true });
+
+  try {
+    const context = await browser.newContext({
+      recordVideo: {
+        dir: dirname(input.outputPath),
+      },
+    });
+    const page = await context.newPage();
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: 30_000 });
+    const video = page.video();
+    await context.close();
+    const recordedPath = await video?.path();
+    if (!recordedPath) {
+      throw new Error("Playwright did not produce a video artifact.");
+    }
+    if (recordedPath !== input.outputPath) {
+      try {
+        await rename(recordedPath, input.outputPath);
+      } catch (error) {
+        if (!isErrnoException(error) || error.code !== "EXDEV") {
+          throw error;
+        }
+        await copyFile(recordedPath, input.outputPath);
+        await rm(recordedPath, { force: true });
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+
+  return {
+    browser: "chromium",
+  };
+}
+
+async function convertVideoToGifWithFfmpeg(input: GifConverterInput): Promise<void> {
+  await execFileAsync("ffmpeg", [
+    "-y",
+    "-i",
+    input.videoPath,
+    "-vf",
+    "fps=12,scale=960:-1:flags=lanczos",
+    input.outputPath,
+  ]);
+}
+
+async function recordCastWithAsciinema(input: CastRecorderInput): Promise<CastRecorderResult> {
+  await execFileAsync("asciinema", ["rec", "--quiet", "--overwrite", "--command", input.command, input.outputPath], {
+    cwd: input.cwd,
+  });
+  return {
+    tool: "asciinema",
   };
 }
 
@@ -1220,12 +1489,46 @@ function findBrowserScenarioUrl(scenario: ScenarioDefinition): string | null {
   return null;
 }
 
+function findTerminalScenarioCommand(scenario: ScenarioDefinition): string | null {
+  const recording = isRecord(scenario.recording) ? scenario.recording : undefined;
+  const target = isRecord(scenario.target) ? scenario.target : undefined;
+  const candidates = [
+    recording?.command,
+    recording?.shell,
+    scenario.command,
+    target?.command,
+  ];
+
+  for (const candidate of candidates) {
+    if (isNonEmptyString(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const step of scenario.steps) {
+    const record = step as Record<string, unknown>;
+    if (isNonEmptyString(record.command)) {
+      return record.command;
+    }
+  }
+
+  return null;
+}
+
 function firstStepId(scenario: ScenarioDefinition): string | undefined {
   return scenario.steps[0]?.id ?? "screenshot";
 }
 
 function isHttpUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//.test(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -4,7 +4,7 @@ Manual test scenario runner and evidence gate CLI for reviewer-visible dogfoodin
 
 ## Release Status
 
-`samotest` is preparing `v0.1.0`, but no release tag should be created until Sprint 2 closeout has passing demo evidence. The package target is the npm package name `samotest` with the `samotest` bin. Current dogfooding should use a local checkout through `npm link` or a local tarball from `npm pack`.
+`samotest` v0.1.0 is released. Current dogfooding should use a local checkout through `npm link` or a local tarball from `npm pack` while Sprint 3 recorder integrations settle.
 
 ## Install For Local Dogfooding
 
@@ -62,6 +62,18 @@ screenshot path/to/screenshot.png
 log path/to/output.log
 ```
 
+Generate native recorder evidence when local dependencies are available:
+
+```sh
+samotest doctor
+samotest record my-browser-scenario --format screenshot
+samotest record my-browser-scenario --format video
+samotest record my-browser-scenario --format gif
+samotest record my-terminal-scenario --format cast
+```
+
+Browser screenshots and videos use Playwright Chromium. GIF capture records browser video first, then converts it with `ffmpeg`; when `ffmpeg` is unavailable but browser video works, `record --format gif` writes video fallback evidence and says how to install `ffmpeg`. Terminal casts use `asciinema` and fail clearly if it is not installed. Generated screenshot, video, GIF, and cast files are written under `artifacts/` and included in `manifest.json` with sha256 checksums.
+
 Inspect committed or generated evidence manifests:
 
 ```sh
@@ -86,7 +98,7 @@ samotest evidence package samples/evidence/sprint1-cli-smoke --format zip
 samotest gate report --manifest samples/evidence/sprint1-cli-smoke/manifest.json --format markdown
 ```
 
-Evidence package, provider upload/comment, and markdown report commands are tracked in issue #20 and are currently placeholders in this branch. Until issue #20 lands, attach the evidence directory or manifest path directly to the PR and include the `samotest gate check --format json` output in review notes.
+Evidence package, provider upload/comment dry-run, markdown report, and `samorev` handoff commands are available for local dogfooding. Attach or upload the evidence directory, include the manifest URL when available, and include the `samotest gate check --format json` output in review notes.
 
 ## PR Checks
 

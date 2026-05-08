@@ -61,9 +61,11 @@ The first version should focus on reproducible manual test scenarios for local a
 ### 3. Record a Reproducible Demo
 
 1. A contributor runs `samotest record <scenario> --format gif`.
-2. `samotest` uses the scenario's recording instructions to attach or, when a configured recorder is available, invoke an external tool to produce a GIF/video/cast.
-3. The generated artifact is referenced by the evidence manifest.
-4. Reviewers can inspect the final recording and, where possible, re-render it from the scenario inputs.
+2. `samotest` uses the scenario's recording instructions and local recorder dependencies to produce a screenshot, browser video, GIF, or terminal cast.
+3. Browser screenshots/videos use Playwright Chromium, GIF conversion uses `ffmpeg`, and terminal casts use `asciinema`.
+4. If `ffmpeg` is unavailable for GIF conversion, `samotest` records browser video fallback evidence when Playwright video is available and prints an actionable install message.
+5. Generated artifacts are referenced by the evidence manifest with sha256 checksums.
+6. Reviewers can inspect the final recording and, where possible, re-render it from the scenario inputs.
 
 ### 4. Enforce Evidence on a PR/MR
 
@@ -537,15 +539,15 @@ Deferred beyond Sprint 1 unless capacity is explicitly confirmed:
 - Provider upload automation for GitHub or GitLab.
 - Full GitHub/GitLab comment/report publishing.
 - Browser/UI scenario execution beyond static sample documentation.
-- Native GIF, video, cast, or `.tape` generation.
+- `.tape` generation.
 - Evidence packaging beyond the manifest directory needed by the thin slice.
 
 Sprint 1 recording expectation:
 
 - `.tape` files may be included as documented examples only; they are not required to be runnable in Sprint 1.
 - GIF, video, and cast files are accepted as attached evidence produced by external tools.
-- `samotest` does not need to generate GIF/video/cast artifacts itself in Sprint 1.
-- Later sprints may add `samotest record` integrations that invoke configured external recorders.
+- Sprint 3 adds native Playwright browser video, optional `ffmpeg` GIF conversion, and `asciinema` terminal cast generation through `samotest record`.
+- Recorder dependencies are optional for CI. `samotest doctor` reports Playwright, `ffmpeg`, and `asciinema` availability; missing tools produce clear record errors or GIF video fallback.
 
 ## Proposed First Sprint Issue Breakdown
 

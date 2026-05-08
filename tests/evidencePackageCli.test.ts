@@ -26,6 +26,25 @@ describe("samotest evidence package", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("fails instead of packaging unmanifested artifacts", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-package-unmanifested-"));
+    const runDir = join(cwd, ".samotest/evidence/run-1");
+
+    try {
+      await writeEvidenceFixture(runDir);
+      await writeFile(join(runDir, "artifacts/page@playwright.webm"), "unmanifested video sidecar\n", "utf8");
+
+      const result = await runCli(["evidence", "package", "run-1", "--format", "zip"], { cwd });
+
+      assert.equal(result.exitCode, 2);
+      assert.equal(result.stdout, "");
+      assert.match(result.stderr, /unmanifested artifact/i);
+      assert.match(result.stderr, /artifacts\/page@playwright\.webm/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 async function writeEvidenceFixture(runDir: string): Promise<void> {

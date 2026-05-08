@@ -20,7 +20,7 @@ describe("Sprint 1 sample scenarios and demo evidence", () => {
     }
   });
 
-  it("documents external screenshot, GIF, video, and cast attachment workflow", async () => {
+  it("documents external attachment and native recorder workflows", async () => {
     const docs = await readFile(join(repoRoot, "docs/sprint-1-evidence-attachments.md"), "utf8");
 
     assert.match(docs, /external tools/i);
@@ -28,7 +28,9 @@ describe("Sprint 1 sample scenarios and demo evidence", () => {
     assert.match(docs, /GIF/i);
     assert.match(docs, /video/i);
     assert.match(docs, /cast/i);
-    assert.match(docs, /native GIF\/video generation is deferred/i);
+    assert.match(docs, /Sprint 3 adds native recorder generation/i);
+    assert.match(docs, /samotest doctor/i);
+    assert.match(docs, /ffmpeg.*fall back to browser video/i);
   });
 
   it("includes a small inspectable demo manifest with a fixture attachment", async () => {
