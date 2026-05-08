@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { formatEvidenceInspectionText, inspectEvidence, packageEvidenceZip, writeEvidenceManifest } from "./evidence.js";
 import { checkGate, formatGateReportMarkdown } from "./gate.js";
 import { validateScenarioFile } from "./scenarioValidation.js";
-import type { ScenarioDefinition, ScenarioStep } from "./scenarioValidation.js";
+import type { ScenarioDefinition, ScenarioStep, ScenarioValidationError } from "./scenarioValidation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -186,6 +186,10 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
   if (command === "init") {
     await initProject(cwd);
     return { exitCode: 0, stdout: "Initialized .samotest\n", stderr: "" };
+  }
+
+  if (command === "scenario" && subcommand === "validate") {
+    return runScenarioValidate(args.slice(2), options);
   }
 
   if (command === "gate" && subcommand === "check") {
@@ -387,7 +391,102 @@ async function ensureGitignoreEntry(path: string, entry: string): Promise<void> 
 }
 
 function isReviewedPlaceholder(command: string, subcommand?: string): boolean {
-  return command === "scenario" && (subcommand === "list" || subcommand === "validate");
+  return command === "scenario" && subcommand === "list";
+}
+
+async function runScenarioValidate(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const providedPath = args.find((arg) => !arg.startsWith("-"));
+
+  if (args.some((arg) => arg.startsWith("-"))) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Usage: samotest scenario validate [path]\n",
+    };
+  }
+
+  const files = providedPath
+    ? [{
+        displayPath: providedPath,
+        absolutePath: isAbsolute(providedPath) ? providedPath : join(cwd, providedPath),
+      }]
+    : await findDefaultScenarioFiles(cwd);
+
+  if (files.length === 0) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "No scenario path provided and no YAML scenarios found under .samotest/scenarios.\nUsage: samotest scenario validate [path]\n",
+    };
+  }
+
+  const validLines: string[] = [];
+  const invalidSections: string[] = [];
+  let readFailure: string | undefined;
+
+  for (const file of files) {
+    try {
+      const validation = await validateScenarioFile(file.absolutePath);
+      if (validation.valid) {
+        validLines.push(`Valid scenario: ${validation.scenario.id} (${file.displayPath})`);
+      } else {
+        invalidSections.push(formatScenarioValidationErrors(file.displayPath, validation.errors));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      readFailure = `Unable to validate scenario ${file.displayPath}: ${message}`;
+      break;
+    }
+  }
+
+  if (readFailure) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `${readFailure}\n`,
+    };
+  }
+
+  if (invalidSections.length > 0) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: `${invalidSections.join("\n")}\n`,
+    };
+  }
+
+  return {
+    exitCode: 0,
+    stdout: `${validLines.join("\n")}\n`,
+    stderr: "",
+  };
+}
+
+async function findDefaultScenarioFiles(cwd: string): Promise<Array<{ displayPath: string; absolutePath: string }>> {
+  const scenarioDir = join(cwd, ".samotest/scenarios");
+  const entries = await readdir(scenarioDir).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  });
+
+  return entries
+    .filter((entry) => [".yaml", ".yml"].includes(extname(entry)))
+    .sort()
+    .map((entry) => ({
+      displayPath: join(".samotest/scenarios", entry),
+      absolutePath: join(scenarioDir, entry),
+    }));
+}
+
+function formatScenarioValidationErrors(displayPath: string, errors: ScenarioValidationError[]): string {
+  return [
+    `Invalid scenario: ${displayPath}`,
+    ...errors.map((error) => `- ${error.field}: ${error.message}`),
+  ].join("\n");
 }
 
 async function runEvidencePackage(args: string[], options: RunCliOptions): Promise<CliResult> {
