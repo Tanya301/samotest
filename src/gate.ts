@@ -265,6 +265,46 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
   };
 }
 
+export function formatGateReportMarkdown(report: GateReport): string {
+  const lines = [
+    `## samotest evidence gate: ${report.gate.status}`,
+    "",
+    `Checked: ${report.gate.checked_at}`,
+    `Head: ${report.gate.head_sha ?? "unknown"}`,
+    `Summary: ${report.gate.summary.passed} passed, ${report.gate.summary.failed} failed, ${report.gate.summary.warned} warned, ${report.gate.summary.waived} waived`,
+  ];
+
+  if (isNonEmptyString(report.gate.manifest_url)) {
+    lines.push(`Manifest: [manifest](${report.gate.manifest_url})`);
+  } else {
+    lines.push(`Manifest: ${report.gate.manifest_path}`);
+  }
+
+  lines.push(
+    "",
+    "| Scenario | Requirement | Status | Fresh | Evidence | Reason |",
+    "| --- | --- | --- | --- | --- | --- |",
+  );
+
+  for (const scenario of report.scenarios) {
+    const artifacts = scenario.artifacts.length > 0
+      ? scenario.artifacts.map(formatArtifactLink).join("<br>")
+      : "none";
+    lines.push(
+      `| ${escapeTableCell(scenario.id)} | ${scenario.required ? "required" : "optional"} | ${scenario.status} | ${scenario.fresh ? "fresh" : "stale"} | ${artifacts} | ${escapeTableCell(scenario.reason)} |`,
+    );
+  }
+
+  if (report.errors.length > 0) {
+    lines.push("", "### Gate errors");
+    for (const error of report.errors) {
+      lines.push(`- ${error.code}: ${error.message}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 async function artifactUrlErrors(
   manifest: EvidenceManifest,
   required: boolean,
@@ -444,6 +484,19 @@ function malformed(message: string): GateError {
     code: "malformed_manifest",
     message,
   };
+}
+
+function formatArtifactLink(artifact: EvidenceArtifact): string {
+  const label = escapeTableCell(artifact.name || artifact.path);
+  if (isNonEmptyString(artifact.url)) {
+    return `[${label}](${artifact.url})`;
+  }
+
+  return escapeTableCell(artifact.path);
+}
+
+function escapeTableCell(value: string): string {
+  return value.replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 
 function isAuthorizedWaiver(value: GateWaiver | null): value is Required<Pick<GateWaiver, "reviewer" | "reason" | "timestamp">> {

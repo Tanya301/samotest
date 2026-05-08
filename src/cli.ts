@@ -2,14 +2,16 @@
 import { execFile } from "node:child_process";
 import { access, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { basename, extname, isAbsolute, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { formatEvidenceInspectionText, inspectEvidence, writeEvidenceManifest } from "./evidence.js";
-import { checkGate } from "./gate.js";
+import { formatEvidenceInspectionText, inspectEvidence, packageEvidenceZip, writeEvidenceManifest } from "./evidence.js";
+import { checkGate, formatGateReportMarkdown } from "./gate.js";
 import { validateScenarioFile } from "./scenarioValidation.js";
 import type { ScenarioDefinition, ScenarioStep } from "./scenarioValidation.js";
+
+const execFileAsync = promisify(execFile);
 
 export interface CliResult {
   exitCode: number;
@@ -81,12 +83,27 @@ interface GateCheckArgs {
   manifest?: string;
   base?: string;
   head?: string;
-  format: "json" | "text";
+  format: "json" | "text" | "markdown";
 }
 
 interface EvidenceInspectArgs {
   path?: string;
   format: "json" | "text";
+}
+
+interface EvidencePackageArgs {
+  path?: string;
+  format: "zip" | "dir";
+}
+
+interface EvidenceUploadArgs {
+  path?: string;
+  provider?: string;
+  pr?: string;
+  mr?: string;
+  repo?: string;
+  dryRun: boolean;
+  output?: string;
 }
 
 interface RunCommandArgs {
@@ -112,11 +129,12 @@ interface Attachment {
 }
 
 type EvidenceKind = "screenshot" | "gif" | "video" | "cast" | "log" | "note";
+type UploadProvider = "github" | "gitlab";
 type StepStatus = "passed" | "failed" | "blocked" | "skipped" | "waived";
 
 const stepStatuses = new Set<StepStatus>(["passed", "failed", "blocked", "skipped", "waived"]);
 const evidenceKinds = new Set<EvidenceKind>(["screenshot", "gif", "video", "cast", "log", "note"]);
-const execFileAsync = promisify(execFile);
+const uploadProviders = new Set<UploadProvider>(["github", "gitlab"]);
 
 export async function runCli(args: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -139,8 +157,20 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
     return runGateCheck(args.slice(2), options);
   }
 
+  if (command === "gate" && subcommand === "report") {
+    return runGateReport(args.slice(2), options);
+  }
+
   if (command === "evidence" && subcommand === "inspect") {
     return runEvidenceInspect(args.slice(2), options);
+  }
+
+  if (command === "evidence" && subcommand === "package") {
+    return runEvidencePackage(args.slice(2), options);
+  }
+
+  if (command === "evidence" && subcommand === "upload") {
+    return runEvidenceUpload(args.slice(2), options);
   }
 
   if (command === "run") {
@@ -322,12 +352,43 @@ async function ensureGitignoreEntry(path: string, entry: string): Promise<void> 
 }
 
 function isReviewedPlaceholder(command: string, subcommand?: string): boolean {
-  return (
-    command === "run" ||
-    (command === "scenario" && (subcommand === "list" || subcommand === "validate")) ||
-    (command === "evidence" && ["package", "upload"].includes(subcommand ?? "")) ||
-    (command === "gate" && subcommand === "report")
-  );
+  return command === "scenario" && (subcommand === "list" || subcommand === "validate");
+}
+
+async function runEvidencePackage(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const parsed = parseEvidencePackageArgs(args);
+
+  if (!parsed.path) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required argument <run-id-or-path>\n",
+    };
+  }
+
+  if (parsed.format !== "zip") {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Invalid --format. Expected zip.\n",
+    };
+  }
+
+  try {
+    const result = await packageEvidenceZip(parsed.path, options.cwd);
+    return {
+      exitCode: 0,
+      stdout: `Created evidence package ${result.output_path}\nEntries: ${result.entries.length}\n`,
+      stderr: "",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Evidence cannot be packaged: ${message}\n`,
+    };
+  }
 }
 
 async function runDoctor(options: RunCliOptions): Promise<CliResult> {
@@ -551,6 +612,140 @@ async function runGateCheck(args: string[], options: RunCliOptions): Promise<Cli
   };
 }
 
+async function runGateReport(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const parsed = parseGateCheckArgs(args);
+
+  if (!parsed.manifest) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required option --manifest <path>\n",
+    };
+  }
+
+  if (parsed.format !== "markdown" && parsed.format !== "json" && parsed.format !== "text") {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Invalid --format. Expected markdown, json, or text.\n",
+    };
+  }
+
+  const result = await checkGate({
+    manifestPath: parsed.manifest,
+    cwd: options.cwd,
+    baseRef: parsed.base,
+    headSha: parsed.head,
+    resolveArtifactUrl: options.resolveArtifactUrl,
+  });
+
+  if (parsed.format === "json") {
+    return {
+      exitCode: result.exitCode,
+      stdout: `${JSON.stringify(result.report, null, 2)}\n`,
+      stderr: "",
+    };
+  }
+
+  if (parsed.format === "text") {
+    return {
+      exitCode: result.exitCode,
+      stdout: `samotest gate ${result.report.gate.status}\n`,
+      stderr: "",
+    };
+  }
+
+  return {
+    exitCode: result.exitCode,
+    stdout: formatGateReportMarkdown(result.report),
+    stderr: "",
+  };
+}
+
+async function runEvidenceUpload(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const parsed = parseEvidenceUploadArgs(args);
+
+  if (!parsed.path) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required argument <run-id-or-path>\n",
+    };
+  }
+
+  const inspection = await inspectEvidence(parsed.path, cwd).catch((error: Error) => ({ error }));
+  if ("error" in inspection) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Evidence cannot be prepared for upload: ${inspection.error.message}\n`,
+    };
+  }
+
+  const rawProvider = parsed.provider ?? inspection.manifest.review?.provider;
+  const provider = parseUploadProvider(rawProvider);
+  if (!provider.ok) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: `${provider.error}\n`,
+    };
+  }
+
+  const gate = await checkGate({
+    manifestPath: inspection.manifest_path,
+    cwd,
+    resolveArtifactUrl: options.resolveArtifactUrl,
+  });
+  const body = formatGateReportMarkdown(gate.report);
+  const fallbackPath =
+    parsed.output ?? join(cwd, ".samotest", "evidence", `${inspection.manifest.run.id}-${provider.value}-comment.md`);
+  await mkdir(dirname(fallbackPath), { recursive: true });
+  await writeFile(fallbackPath, body, "utf8");
+
+  if (parsed.dryRun) {
+    return {
+      exitCode: 0,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nDry run: no comment posted.\n`,
+      stderr: "",
+    };
+  }
+
+  const target =
+    provider.value === "github" ? parsed.pr ?? inspection.manifest.review?.pr : parsed.mr ?? inspection.manifest.review?.mr;
+  if (!target) {
+    return {
+      exitCode: 0,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nNo ${
+        provider.value === "github" ? "--pr" : "--mr"
+      } target was provided, so no comment was posted.\n`,
+      stderr: "",
+    };
+  }
+
+  const posted = await postProviderComment({
+    provider: provider.value,
+    target,
+    repo: parsed.repo ?? inspection.manifest.source.repo,
+    bodyPath: fallbackPath,
+  });
+
+  if (!posted.ok) {
+    return {
+      exitCode: 0,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\n${posted.reason}\n`,
+      stderr: "",
+    };
+  }
+
+  return {
+    exitCode: 0,
+    stdout: `Posted ${provider.value} comment to ${target}\nSaved comment markdown at ${fallbackPath}\n`,
+    stderr: "",
+  };
+}
+
 function parseGateCheckArgs(args: string[]): GateCheckArgs {
   const parsed: GateCheckArgs = {
     format: "text",
@@ -576,6 +771,124 @@ function parseGateCheckArgs(args: string[]): GateCheckArgs {
   }
 
   return parsed;
+}
+
+function parseEvidencePackageArgs(args: string[]): EvidencePackageArgs {
+  const parsed: EvidencePackageArgs = {
+    format: "zip",
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--format") {
+      parsed.format = next as EvidencePackageArgs["format"];
+      index += 1;
+    } else if (!arg.startsWith("-") && !parsed.path) {
+      parsed.path = arg;
+    }
+  }
+
+  return parsed;
+}
+
+function parseEvidenceUploadArgs(args: string[]): EvidenceUploadArgs {
+  const parsed: EvidenceUploadArgs = {
+    dryRun: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--provider") {
+      parsed.provider = next;
+      index += 1;
+    } else if (arg === "--pr") {
+      parsed.pr = next;
+      index += 1;
+    } else if (arg === "--mr") {
+      parsed.mr = next;
+      index += 1;
+    } else if (arg === "--repo") {
+      parsed.repo = next;
+      index += 1;
+    } else if (arg === "--output") {
+      parsed.output = next;
+      index += 1;
+    } else if (arg === "--dry-run") {
+      parsed.dryRun = true;
+    } else if (!arg.startsWith("-") && !parsed.path) {
+      parsed.path = arg;
+    }
+  }
+
+  return parsed;
+}
+
+function parseUploadProvider(provider: string | undefined): { ok: true; value: UploadProvider } | { ok: false; error: string } {
+  if (!provider) {
+    return { ok: false, error: "Missing required option --provider github|gitlab" };
+  }
+
+  if (uploadProviders.has(provider as UploadProvider)) {
+    return { ok: true, value: provider as UploadProvider };
+  }
+
+  return { ok: false, error: `Unsupported provider "${provider}". Supported providers: github, gitlab` };
+}
+
+async function postProviderComment(options: {
+  provider: UploadProvider;
+  target: string;
+  repo?: string;
+  bodyPath: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (options.provider === "github") {
+    const auth = await commandSucceeds("gh", ["auth", "status"]);
+    if (!auth) {
+      return { ok: false, reason: "gh is not authenticated; local markdown fallback was written." };
+    }
+
+    const args = ["pr", "comment", options.target, "--body-file", options.bodyPath];
+    if (options.repo) {
+      args.push("--repo", options.repo);
+    }
+
+    return postCommand("gh", args);
+  }
+
+  const auth = await commandSucceeds("glab", ["auth", "status"]);
+  if (!auth) {
+    return { ok: false, reason: "glab is not authenticated; local markdown fallback was written." };
+  }
+
+  const args = ["mr", "note", options.target, "--message", await readFile(options.bodyPath, "utf8")];
+  if (options.repo) {
+    args.push("--repo", options.repo);
+  }
+
+  return postCommand("glab", args);
+}
+
+async function commandSucceeds(command: string, args: string[]): Promise<boolean> {
+  try {
+    await execFileAsync(command, args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function postCommand(command: string, args: string[]): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    await execFileAsync(command, args);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `${command} comment command failed; local markdown fallback was written. ${message}` };
+  }
 }
 
 function parseEvidenceInspectArgs(args: string[]): EvidenceInspectArgs {
