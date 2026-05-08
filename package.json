@@ -1,17 +1,35 @@
 {
   "name": "samotest",
   "version": "0.1.0",
-  "private": true,
+  "description": "Manual test scenario runner and evidence gate CLI.",
   "type": "module",
+  "main": "./dist/cli.js",
   "bin": {
-    "samotest": "dist/cli.js"
+    "samotest": "./dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "docs/",
+    "samples/",
+    "LICENSE",
+    "README.md",
+    "SPEC.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "start": "tsx src/cli.ts",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tanya301/samotest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tanya301/samotest/issues"
+  },
+  "homepage": "https://github.com/Tanya301/samotest#readme",
   "license": "MIT",
   "dependencies": {
     "yaml": "^2.7.0"

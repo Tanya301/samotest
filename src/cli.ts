@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { formatEvidenceInspectionText, inspectEvidence } from "./evidence.js";
 import { checkGate } from "./gate.js";
@@ -621,7 +622,20 @@ async function readAvailableStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+async function isMainModule(): Promise<boolean> {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  const [modulePath, invokedPath] = await Promise.all([
+    realpath(fileURLToPath(import.meta.url)),
+    realpath(process.argv[1]),
+  ]);
+
+  return modulePath === invokedPath;
+}
+
+if (await isMainModule()) {
   const result = await runCli(process.argv.slice(2));
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
