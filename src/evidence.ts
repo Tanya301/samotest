@@ -226,7 +226,13 @@ export async function packageEvidenceZip(inputPath: string, cwd = process.cwd())
 
   const runDir = dirname(inspection.manifest_path);
   const outputPath = join(runDir, `${inspection.manifest.run.id}-evidence.zip`);
-  const entries = await listPackageEntries(runDir);
+  const manifestArtifactPaths = new Set((inspection.manifest.artifacts ?? []).map((artifact) => artifact.path));
+  const unmanifestedArtifacts = await listUnmanifestedArtifacts(runDir, manifestArtifactPaths);
+  if (unmanifestedArtifacts.length > 0) {
+    throw new Error(`Unmanifested artifact files cannot be packaged: ${unmanifestedArtifacts.join(", ")}`);
+  }
+
+  const entries = ["manifest.json", ...manifestArtifactPaths].sort((left, right) => left.localeCompare(right));
   await writeFile(outputPath, await createZip(entries.map((entry) => ({ name: entry, dataPath: join(runDir, entry) }))));
 
   return {
@@ -338,15 +344,26 @@ async function resolveManifestPath(inputPath: string, cwd: string): Promise<stri
   return join(absolutePath, "manifest.json");
 }
 
-async function listPackageEntries(runDir: string, relativeDir = ""): Promise<string[]> {
-  const absoluteDir = join(runDir, relativeDir);
+async function listUnmanifestedArtifacts(runDir: string, manifestArtifactPaths: Set<string>): Promise<string[]> {
+  const artifactsDir = join(runDir, "artifacts");
+  const artifactPaths = await listPackageEntries(artifactsDir, "artifacts").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  });
+
+  return artifactPaths.filter((artifactPath) => !manifestArtifactPaths.has(artifactPath));
+}
+
+async function listPackageEntries(absoluteDir: string, relativeDir = ""): Promise<string[]> {
   const entries = await readdir(absoluteDir, { withFileTypes: true });
   const files: string[] = [];
 
   for (const entry of entries) {
     const relativePath = toManifestPath(join(relativeDir, entry.name));
     if (entry.isDirectory()) {
-      files.push(...await listPackageEntries(runDir, relativePath));
+      files.push(...await listPackageEntries(join(absoluteDir, entry.name), relativePath));
     } else if (!entry.name.endsWith(".zip")) {
       files.push(relativePath);
     }

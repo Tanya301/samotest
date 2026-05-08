@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { access, copyFile, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { platform } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1409,7 +1409,15 @@ async function recordVideoWithPlaywright(input: VideoRecorderInput): Promise<Vid
       throw new Error("Playwright did not produce a video artifact.");
     }
     if (recordedPath !== input.outputPath) {
-      await copyFile(recordedPath, input.outputPath);
+      try {
+        await rename(recordedPath, input.outputPath);
+      } catch (error) {
+        if (!isErrnoException(error) || error.code !== "EXDEV") {
+          throw error;
+        }
+        await copyFile(recordedPath, input.outputPath);
+        await rm(recordedPath, { force: true });
+      }
     }
   } finally {
     await browser.close();
@@ -1517,6 +1525,10 @@ function isHttpUrl(value: unknown): value is string {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
