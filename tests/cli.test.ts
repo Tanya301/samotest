@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,6 +111,61 @@ result:
     }
   });
 
+  it("reads piped stdin in the default guided run mode", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
+
+    try {
+      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "artifacts"), { recursive: true });
+      await writeFile(join(cwd, "artifacts/open-cart.png"), "fake screenshot");
+      await writeFile(
+        join(cwd, ".samotest/scenarios/checkout-discount-demo.yaml"),
+        `id: checkout-discount-demo
+title: Checkout discount manual demo
+owner: "@team-web"
+priority: required
+steps:
+  - id: open-cart
+    instruction: "Open the cart page for the seeded demo account."
+result:
+  required_observations:
+    - "Cart page opens."
+`,
+      );
+
+      const result = await runCliProcess(
+        [
+          "run",
+          "checkout-discount-demo",
+          "--run-id",
+          "run-default",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          stdin: ["run note: smoke", "passed", "step note: cart rendered", "screenshot artifacts/open-cart.png", ""].join(
+            "\n",
+          ),
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /Status \[passed\|failed\|blocked\|skipped\|waived\]:/);
+      assert.match(result.stdout, /Recorded run run-default/);
+
+      const run = JSON.parse(
+        await readFile(join(cwd, ".samotest/evidence/run-default/run.json"), "utf8"),
+      );
+      assert.equal(run.metadata.non_interactive, false);
+      assert.equal(run.notes[0], "smoke");
+      assert.equal(run.steps[0].status, "passed");
+      assert.equal(run.steps[0].attachments[0].path, "artifacts/open-cart.png");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("rejects waived step status unless the scenario step allows it", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
@@ -142,3 +198,38 @@ result:
     }
   });
 });
+
+async function runCliProcess(
+  args: string[],
+  options: { cwd: string; stdin: string },
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+  const repoRoot = join(import.meta.dirname, "..");
+  const child = spawn(process.execPath, [
+    "--import",
+    join(repoRoot, "node_modules/tsx/dist/loader.mjs"),
+    join(repoRoot, "src/cli.ts"),
+    ...args,
+  ], {
+    cwd: options.cwd,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  child.stdin.end(options.stdin);
+
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+
+  return { exitCode, stdout, stderr };
+}
