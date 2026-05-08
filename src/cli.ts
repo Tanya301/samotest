@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { formatEvidenceInspectionText, inspectEvidence } from "./evidence.js";
 import { checkGate } from "./gate.js";
 
 export interface CliResult {
@@ -51,6 +52,11 @@ interface GateCheckArgs {
   format: "json" | "text";
 }
 
+interface EvidenceInspectArgs {
+  path?: string;
+  format: "json" | "text";
+}
+
 export async function runCli(args: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
   const [command, subcommand] = args;
@@ -70,6 +76,10 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
 
   if (command === "gate" && subcommand === "check") {
     return runGateCheck(args.slice(2), options);
+  }
+
+  if (command === "evidence" && subcommand === "inspect") {
+    return runEvidenceInspect(args.slice(2), options);
   }
 
   if (isReviewedPlaceholder(command, subcommand)) {
@@ -116,9 +126,55 @@ function isReviewedPlaceholder(command: string, subcommand?: string): boolean {
     command === "record" ||
     command === "doctor" ||
     (command === "scenario" && (subcommand === "list" || subcommand === "validate")) ||
-    (command === "evidence" && ["inspect", "package", "upload"].includes(subcommand ?? "")) ||
+    (command === "evidence" && ["package", "upload"].includes(subcommand ?? "")) ||
     (command === "gate" && subcommand === "report")
   );
+}
+
+async function runEvidenceInspect(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const parsed = parseEvidenceInspectArgs(args);
+
+  if (!parsed.path) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required argument <manifest-or-run-dir>\n",
+    };
+  }
+
+  if (parsed.format !== "json" && parsed.format !== "text") {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Invalid --format. Expected json or text.\n",
+    };
+  }
+
+  try {
+    const inspection = await inspectEvidence(parsed.path, options.cwd);
+    const exitCode = inspection.ok ? 0 : 1;
+
+    if (parsed.format === "json") {
+      return {
+        exitCode,
+        stdout: `${JSON.stringify(inspection, null, 2)}\n`,
+        stderr: "",
+      };
+    }
+
+    return {
+      exitCode,
+      stdout: formatEvidenceInspectionText(inspection),
+      stderr: "",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Evidence cannot be inspected: ${message}\n`,
+    };
+  }
 }
 
 function formatCommand(command: string, subcommand?: string): string {
@@ -188,6 +244,26 @@ function parseGateCheckArgs(args: string[]): GateCheckArgs {
     } else if (arg === "--format") {
       parsed.format = next as GateCheckArgs["format"];
       index += 1;
+    }
+  }
+
+  return parsed;
+}
+
+function parseEvidenceInspectArgs(args: string[]): EvidenceInspectArgs {
+  const parsed: EvidenceInspectArgs = {
+    format: "text",
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--format") {
+      parsed.format = next as EvidenceInspectArgs["format"];
+      index += 1;
+    } else if (!arg.startsWith("-") && !parsed.path) {
+      parsed.path = arg;
     }
   }
 
