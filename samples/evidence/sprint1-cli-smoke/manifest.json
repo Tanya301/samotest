@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.0"
+  },
+  "run": {
+    "id": "sprint1-cli-smoke-sample",
+    "scenario_id": "sprint1-cli-smoke",
+    "status": "passed",
+    "started_at": "2026-05-08T20:00:00Z",
+    "finished_at": "2026-05-08T20:01:00Z",
+    "required": true
+  },
+  "source": {
+    "repo": "Tanya301/samotest",
+    "base_ref": "main",
+    "head_ref": "codex/issue-9-sample-evidence",
+    "commit": "8e0cc334907a61e651e7dfa11505d673831baccf"
+  },
+  "environment": {
+    "os": "linux",
+    "profile": "local",
+    "redacted": true
+  },
+  "artifacts": [
+    {
+      "type": "log",
+      "name": "cli-help-output",
+      "path": "artifacts/cli-help-output.log",
+      "sha256": "a3009b697a46eb23be834eeb6fed48d692d595b0e1f315f36973e392b3f9c4bd",
+      "url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue-9-sample-evidence/samples/evidence/sprint1-cli-smoke/artifacts/cli-help-output.log"
+    }
+  ],
+  "observations": [
+    {
+      "step_id": "show-help",
+      "status": "passed",
+      "note": "Help output listed Sprint 1 CLI commands."
+    },
+    {
+      "step_id": "inspect-demo-evidence",
+      "status": "passed",
+      "note": "The sample manifest is self-contained and inspectable."
+    }
+  ],
+  "review": {
+    "provider": "github",
+    "manifest_url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue-9-sample-evidence/samples/evidence/sprint1-cli-smoke/manifest.json",
+    "uploaded_urls": []
+  }
+}

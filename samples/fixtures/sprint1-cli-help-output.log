@@ -1,0 +1,12 @@
+samotest --help
+
+Usage: samotest <command> [options]
+
+Manual testing and evidence capture CLI.
+
+Reviewed Sprint 1 commands:
+  samotest init
+  samotest scenario validate [path]
+  samotest run <scenario-id> [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]
+  samotest evidence inspect <run-id-or-path>
+  samotest gate check --manifest <path> [--base <ref>] [--head <ref>] [--format text|json]
