@@ -61,7 +61,7 @@ The first version should focus on reproducible manual test scenarios for local a
 ### 3. Record a Reproducible Demo
 
 1. A contributor runs `samotest record <scenario> --format gif`.
-2. `samotest` uses the scenario's recording instructions to produce a GIF/video/cast.
+2. `samotest` uses the scenario's recording instructions to attach or, when a configured recorder is available, invoke an external tool to produce a GIF/video/cast.
 3. The generated artifact is referenced by the evidence manifest.
 4. Reviewers can inspect the final recording and, where possible, re-render it from the scenario inputs.
 
@@ -93,8 +93,8 @@ samotest record <scenario-id> [--format screenshot|gif|video|cast] [--output <di
 samotest evidence inspect <run-id-or-path>
 samotest evidence package <run-id-or-path> [--format dir|zip]
 samotest evidence upload <run-id-or-path> [--provider github|gitlab]
-samotest gate check [--manifest <path>] [--base <ref>] [--head <ref>]
-samotest gate report [--format text|json|markdown]
+samotest gate check --manifest <path> [--base <ref>] [--head <ref>] [--format text|json]
+samotest gate report --manifest <path> [--format text|json|markdown]
 samotest doctor
 ```
 
@@ -108,8 +108,8 @@ samotest doctor
 - `evidence inspect`: prints a human-readable and machine-readable summary.
 - `evidence package`: builds a portable evidence bundle.
 - `evidence upload`: publishes artifacts to GitHub/GitLab-native storage when configured.
-- `gate check`: exits non-zero when required evidence is missing, stale, or failing.
-- `gate report`: produces review comments or `samorev` gate input.
+- `gate check`: validates one explicit manifest, prints text or the stable JSON gate report, and exits non-zero when required evidence is missing, stale, malformed, waived without authority, or failing.
+- `gate report`: renders the same manifest and gate result for reviewer consumption as text, JSON, or Markdown without changing gate semantics.
 - `doctor`: checks local dependencies such as browser drivers, terminal recorders, capture tools, and auth.
 
 ## Repository Layout
@@ -246,7 +246,8 @@ Every run produces `manifest.json`.
       "type": "screenshot",
       "name": "cart-after-discount",
       "path": "artifacts/cart-after-discount.png",
-      "sha256": "..."
+      "sha256": "...",
+      "url": "https://github.com/Tanya301/samotest/actions/runs/123/artifacts/456"
     }
   ],
   "observations": [
@@ -267,10 +268,12 @@ Every run produces `manifest.json`.
 ### Artifact Rules
 
 - Artifacts must be referenced from the manifest by relative path and checksum.
+- Artifacts uploaded to provider storage must also include a reviewer-accessible `url`.
 - Large artifacts should be uploaded to provider storage or build artifacts instead of committed.
 - The manifest must identify the source revision so stale evidence can be detected.
 - Evidence status must be one of `passed`, `failed`, `blocked`, `skipped`, or `waived`.
 - Waived evidence must include reviewer, timestamp, and reason.
+- Local-only evidence is allowed before upload, but PR/MR gates require either reachable provider URLs or an approved waiver explaining why artifacts remain local-only.
 
 ## GitHub Integration
 
@@ -283,6 +286,17 @@ Every run produces `manifest.json`.
 - Support mapping changed paths and labels to required scenarios.
 - Allow maintainers to configure required evidence per repository.
 
+### GitHub Artifact Discovery Contract
+
+For a GitHub PR, reviewers and `samorev` discover evidence in this order:
+
+1. Read the PR comment or check summary containing `samotest-manifest-url`.
+2. If absent, inspect the required `samotest evidence gate` workflow run for the PR head commit.
+3. Download the workflow artifact named `samotest-evidence-<pr-number>-<head-sha>`.
+4. Read `<bundle>/manifest.json`; every uploaded artifact in the manifest must include `path`, `sha256`, and `url`.
+
+The GitHub artifact retention period must be at least 30 days or the repository default, whichever is longer. Local evidence can be uploaded outside CI with `samotest evidence upload --provider github`, but the resulting PR comment or check summary must point to the same manifest URL and artifact URLs that CI would expose. If evidence remains local-only, the gate fails unless a maintainer or configured code owner adds an authorized waiver.
+
 Example GitHub Actions usage:
 
 ```yaml
@@ -294,8 +308,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: samotest gate check --base origin/main --head HEAD
-      - run: samotest gate report --format markdown >> "$GITHUB_STEP_SUMMARY"
+      - run: samotest gate check --manifest .samotest/evidence/latest/manifest.json --base origin/main --head HEAD --format json
+      - run: samotest gate report --manifest .samotest/evidence/latest/manifest.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ## GitLab Integration
@@ -308,14 +322,25 @@ jobs:
 - Expose `samotest gate check` as a CI job that can block merge.
 - Support mapping changed paths and labels to required scenarios.
 
+### GitLab Artifact Discovery Contract
+
+For a GitLab MR, reviewers and `samorev` discover evidence in this order:
+
+1. Read the MR note or job summary containing `samotest-manifest-url`.
+2. If absent, inspect the required `samotest:evidence` CI job for the MR head SHA.
+3. Download the job artifact named `samotest-evidence-<mr-iid>-<head-sha>`.
+4. Read `<bundle>/manifest.json`; every uploaded artifact in the manifest must include `path`, `sha256`, and `url`.
+
+The GitLab job artifact retention period must be at least 30 days or the project default, whichever is longer. Local evidence can be uploaded outside CI with `samotest evidence upload --provider gitlab`, but the resulting MR note or job summary must expose the same manifest URL and artifact URLs that CI would expose. If evidence remains local-only, the gate fails unless a maintainer or configured code owner adds an authorized waiver.
+
 ## samorev Integration
 
 `samorev` should treat `samotest` as the evidence provider for manual testing gates.
 
 Expected integration contract:
 
-- `samotest gate check --format json` emits a stable JSON report.
-- `samorev` reads the report and evaluates repository policy.
+- `samotest gate check --manifest <path> --format json` is the Sprint 1 machine contract for `samorev`.
+- `samotest gate report --manifest <path> --format json` may emit the same JSON shape for reporting, but `samorev` gates consume `gate check` because its exit code is authoritative.
 - `samorev` can require:
   - at least one evidence bundle per PR/MR;
   - all required scenarios for changed paths;
@@ -324,12 +349,81 @@ Expected integration contract:
 - `samorev` can render missing evidence as actionable review comments.
 - `samorev` should link directly to evidence artifacts when provider URLs exist.
 
-Initial gate statuses:
+Sprint 1 gate statuses:
 
 - `pass`: required evidence exists and is fresh.
 - `fail`: required evidence is missing, failed, stale, or malformed.
 - `warn`: optional evidence is missing or low quality.
 - `waived`: required evidence was waived according to policy.
+
+Sprint 1 exit semantics:
+
+- Exit `0`: overall status is `pass` or `warn`.
+- Exit `1`: overall status is `fail`.
+- Exit `2`: the manifest cannot be read, parsed, or validated.
+- Exit `3`: command usage or configuration is invalid.
+- Exit `4`: an uploaded artifact URL required for review cannot be resolved.
+
+Freshness rules:
+
+- When `gate.require_fresh_head` is true, `manifest.source.commit` must equal the PR/MR head SHA passed with `--head` or discovered from CI.
+- `manifest.source.base_ref` and `manifest.source.head_ref` must match supplied refs when `--base` or `--head` are provided.
+- Each required scenario must have a finished run whose status is `passed` or an authorized `waived`.
+- Stale, missing, malformed, failed, skipped, blocked, unauthorized waived, checksum-mismatched, or URL-unresolved evidence produces `fail`.
+
+Stable Sprint 1 JSON gate report:
+
+```json
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.0"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-08T19:15:00Z",
+    "base_ref": "main",
+    "head_ref": "feature/discount",
+    "head_sha": "abc123",
+    "manifest_path": ".samotest/evidence/run-1/manifest.json",
+    "manifest_url": "https://github.com/Tanya301/samotest/actions/runs/123/artifacts/456",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "scenarios": [
+    {
+      "id": "checkout-discount-demo",
+      "required": true,
+      "status": "fail",
+      "fresh": false,
+      "reason": "manifest source commit does not match head_sha",
+      "artifacts": [
+        {
+          "type": "screenshot",
+          "name": "cart-after-discount",
+          "path": "artifacts/cart-after-discount.png",
+          "sha256": "...",
+          "url": "https://github.com/Tanya301/samotest/actions/runs/123/artifacts/456"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "stale_evidence",
+      "message": "Evidence was captured for a different commit.",
+      "scenario_id": "checkout-discount-demo"
+    }
+  ]
+}
+```
 
 ## Alignment Loop
 
@@ -339,6 +433,46 @@ Every sprint must follow this loop:
 2. **PR review gate:** Every implementation PR/MR must be reviewed against the current spec. Reviewers should reject changes that drift from the agreed behavior without a spec update.
 3. **Test evidence gate:** Every implementation PR/MR must include `samotest` evidence or an explicit waiver. `samorev` should block merge when required evidence is missing, stale, or malformed.
 4. **Sprint-close demo/evidence review:** At sprint close, review the produced screenshots, GIFs, videos, casts, manifests, and gate reports. Capture gaps as spec updates or next-sprint issues.
+
+### Required Sprint Artifacts and Gates
+
+The alignment loop is enforceable through required artifacts, status checks, waiver authority, and signoff points:
+
+| Stage | Required artifact | Required check | Signoff |
+| --- | --- | --- | --- |
+| Sprint start | A spec/scenario coverage review issue or PR comment listing in-scope behavior, required scenarios, deferred gaps, and waiver policy. | Planning cannot begin until the artifact is approved. | Sprint lead plus maintainer or configured code owner. |
+| Implementation PR/MR | A spec-alignment section in the PR/MR body linking changed behavior to `SPEC.md`, scenario files, and the evidence manifest URL. | PR/MR template checklist must be complete before review. | Reviewer verifies spec alignment before approval. |
+| Evidence gate | `manifest.json`, uploaded artifact URLs, `samotest gate check --manifest <path> --format json` output, and provider check/job link. | Required CI status `samotest evidence gate` must pass. Missing, stale, malformed, URL-unresolved, checksum-mismatched, failed, skipped, blocked, or unauthorized waived evidence fails. | `samorev`/CI enforces; reviewer confirms artifacts are inspectable. |
+| Waiver | Waiver record in the manifest or PR/MR comment with scenario id, reason, approver, timestamp, and expiration or follow-up issue. | `samotest gate check` accepts only authorized waivers. | Maintainer or configured code owner; authors cannot waive their own required evidence. |
+| Sprint close | Sprint-close evidence review issue or PR comment linking manifest(s), screenshots, GIF/video/cast artifacts, gate reports, demo notes, and follow-up gaps. | Next sprint spec update cannot begin until sprint-close review is recorded. | Sprint lead plus maintainer or configured code owner. |
+
+Implementation PR/MR template minimum:
+
+```markdown
+## Spec Alignment
+- SPEC.md sections:
+- Scenarios exercised:
+- Evidence manifest URL:
+- Artifact URLs:
+- Waivers:
+
+## samotest Gate
+- [ ] `samotest gate check --manifest <path> --format json` passed or authorized waiver is linked.
+- [ ] Manifest source commit matches this PR/MR head SHA.
+- [ ] Reviewers can open every required artifact URL.
+```
+
+Required CI checks:
+
+- `samotest scenario validate` for changed scenario files.
+- `samotest gate check --manifest <path> --head <sha> --format json` for every implementation PR/MR.
+- Provider artifact availability check for the manifest URL and each artifact URL.
+
+Required signoff points:
+
+- Sprint-start approval signs off scenario coverage before implementation starts.
+- PR/MR approval signs off spec alignment and evidence availability for the change.
+- Sprint-close approval signs off demo quality, known gaps, and whether the next sprint requires spec updates.
 
 ## Security and Privacy Constraints
 
@@ -381,22 +515,36 @@ redaction:
 
 ## Sprint 1 Scope
 
-Sprint 1 should produce a usable spec-first prototype, not a complete product.
+Sprint 1 should produce a thin vertical slice of the spec-first workflow, not a complete product. The slice is: initialize repository config, validate one scenario schema, run one guided text scenario, attach existing files, generate a manifest with checksums, inspect that manifest, and run a minimal gate check against an explicit manifest path.
 
 ### Acceptance Criteria
 
 - Repository contains reviewed `SPEC.md` as the source of product truth.
 - `samotest init` can create `.samotest/config.yaml`, `.samotest/scenarios/`, and `.samotest/evidence/`.
-- `samotest scenario validate` can validate required scenario fields.
+- `samotest scenario validate` can validate the required fields for one YAML scenario schema.
 - `samotest run <scenario-id>` can guide a contributor through text-based manual steps and collect notes plus file attachments.
 - Evidence manifest schema `0.1` is generated with run metadata, source revision, observations, artifacts, and checksums.
 - `samotest evidence inspect` can summarize a manifest in text and JSON.
-- `samotest gate check` can fail when required evidence is missing, stale, malformed, or not passed.
-- A sample GitHub Actions workflow is documented.
-- A sample GitLab CI job is documented.
-- A sample `samorev` integration report format is documented.
-- At least two sample scenarios exist: one CLI scenario and one browser/UI scenario.
-- Sprint-close demo includes at least one screenshot and one GIF or terminal cast captured as evidence.
+- `samotest gate check --manifest <path> --format json` can fail when explicit manifest evidence is missing, stale, malformed, URL-unresolved, or not passed.
+- The stable Sprint 1 gate JSON report and exit semantics documented in this spec are implemented.
+- One sample CLI scenario exists and can produce notes plus one attached file artifact.
+- Sprint-close demo includes one manifest, one screenshot or log attachment, gate JSON output, and demo notes.
+
+Deferred beyond Sprint 1 unless capacity is explicitly confirmed:
+
+- Path-aware or label-aware scenario resolution.
+- Provider upload automation for GitHub or GitLab.
+- Full GitHub/GitLab comment/report publishing.
+- Browser/UI scenario execution beyond static sample documentation.
+- Native GIF, video, cast, or `.tape` generation.
+- Evidence packaging beyond the manifest directory needed by the thin slice.
+
+Sprint 1 recording expectation:
+
+- `.tape` files may be included as documented examples only; they are not required to be runnable in Sprint 1.
+- GIF, video, and cast files are accepted as attached evidence produced by external tools.
+- `samotest` does not need to generate GIF/video/cast artifacts itself in Sprint 1.
+- Later sprints may add `samotest record` integrations that invoke configured external recorders.
 
 ## Proposed First Sprint Issue Breakdown
 
@@ -426,25 +574,22 @@ Sprint 1 should produce a usable spec-first prototype, not a complete product.
    - Include repo, commit, run, environment, observations, artifacts, and checksums.
    - Keep paths relative to the evidence bundle.
 
-6. **Inspect and package evidence**
+6. **Inspect evidence**
    - Implement `samotest evidence inspect`.
-   - Implement `samotest evidence package`.
    - Provide both text and JSON output.
 
 7. **Implement first gate check**
-   - Read config, scenarios, changed paths, and manifests.
-   - Detect missing, stale, malformed, failed, skipped, blocked, and waived evidence.
+   - Read config, scenarios, and one explicit manifest path.
+   - Detect missing, stale, malformed, URL-unresolved, failed, skipped, blocked, and unauthorized waived evidence.
    - Emit stable JSON for `samorev`.
 
-8. **Document GitHub/GitLab integration**
-   - Add example GitHub Actions workflow.
-   - Add example GitLab CI job.
-   - Document artifact upload expectations.
+8. **Document provider discovery**
+   - Document the GitHub/GitLab artifact discovery contracts.
+   - Document that provider upload automation is deferred beyond Sprint 1.
 
-9. **Create sample scenarios and demo evidence**
+9. **Create sample scenario and demo evidence**
    - Add one CLI scenario.
-   - Add one browser/UI scenario.
-   - Capture at least one screenshot and one GIF or terminal cast for sprint-close review.
+   - Attach one externally captured screenshot or log for sprint-close review.
 
 10. **Run sprint-close alignment review**
     - Review the spec against implementation.
@@ -455,8 +600,5 @@ Sprint 1 should produce a usable spec-first prototype, not a complete product.
 
 - Should Sprint 1 choose a specific implementation language, or should that remain open until issue planning?
 - Should scenario evidence be committed for small repositories, or should all artifacts live only in CI/provider storage?
-- What exact JSON contract does `samorev` expect today, if any?
 - Should browser capture use Playwright as the first supported implementation?
 - Should terminal recordings standardize on asciinema-compatible casts, VHS tapes, or both?
-- What waiver authority is acceptable: author, reviewer, maintainer, or code owner only?
-
