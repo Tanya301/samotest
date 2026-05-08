@@ -1,0 +1,14 @@
+id: checkout-discount-demo
+title: Checkout discount manual demo
+owner: "@team-web"
+priority: required
+steps:
+  - id: open-cart
+    instruction: "Open the cart page for the seeded demo account."
+  - id: apply-code
+    instruction: "Apply discount code SAVE10."
+    expected: "Order summary shows a 10% discount and updated total."
+result:
+  required_observations:
+    - "Discount appears once."
+    - "Total updates without page refresh."
