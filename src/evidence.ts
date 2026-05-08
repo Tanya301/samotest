@@ -307,7 +307,15 @@ async function resolveManifestPath(inputPath: string, cwd: string): Promise<stri
     return absolutePath;
   }
 
+  if (isBareRunId(inputPath)) {
+    return resolve(cwd, ".samotest/evidence", inputPath, "manifest.json");
+  }
+
   return join(absolutePath, "manifest.json");
+}
+
+function isBareRunId(inputPath: string): boolean {
+  return !isAbsolute(inputPath) && !inputPath.includes("/") && !inputPath.includes("\\");
 }
 
 async function sha256File(path: string): Promise<string> {

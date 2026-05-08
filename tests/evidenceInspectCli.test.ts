@@ -50,6 +50,23 @@ describe("samotest evidence inspect", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("resolves bare run ids from the default evidence directory", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-inspect-"));
+    const runDir = join(cwd, ".samotest/evidence/run-1");
+
+    try {
+      await writeEvidenceFixture(runDir);
+
+      const result = await runCli(["evidence", "inspect", "run-1"], { cwd });
+
+      assert.equal(result.exitCode, 0);
+      assert.match(result.stdout, /Evidence run run-1/);
+      assert.equal(result.stderr, "");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 async function writeEvidenceFixture(runDir: string): Promise<void> {
