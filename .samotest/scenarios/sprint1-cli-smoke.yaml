@@ -1,0 +1,39 @@
+id: sprint1-cli-smoke
+title: Sprint 1 CLI evidence smoke
+owner: "@team-devex"
+tags: ["cli", "evidence", "sprint-1", "sample"]
+priority: required
+applies_to:
+  paths:
+    - "src/cli.ts"
+    - "src/evidence.ts"
+    - "docs/**"
+    - "samples/**"
+  labels:
+    - "testing"
+environment:
+  profile: local
+prerequisites:
+  - "Install dependencies with npm ci."
+  - "Build the CLI with npm run build when validating the packaged dist entrypoint."
+steps:
+  - id: show-help
+    instruction: "Run the built CLI help command from the repository root."
+    expected: "Help output lists the reviewed Sprint 1 commands."
+    evidence:
+      - type: log
+        name: cli-help-output
+  - id: inspect-demo-evidence
+    instruction: "Run evidence inspect against samples/evidence/sprint1-cli-smoke."
+    expected: "Inspection reports a passed run and a valid log artifact checksum."
+    evidence:
+      - type: log
+        name: evidence-inspect-output
+result:
+  required_observations:
+    - "The CLI help command exits successfully."
+    - "The evidence manifest can be inspected successfully."
+    - "Attached log evidence is small and reviewable."
+recording:
+  mode: terminal
+  preferred_formats: ["cast"]

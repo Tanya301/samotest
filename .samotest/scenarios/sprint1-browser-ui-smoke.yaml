@@ -1,0 +1,43 @@
+id: sprint1-browser-ui-smoke
+title: Sprint 1 browser UI attachment smoke
+owner: "@team-web"
+tags: ["browser", "ui", "evidence", "sprint-1", "sample"]
+priority: required
+applies_to:
+  paths:
+    - "web/**"
+    - "docs/**"
+    - "samples/**"
+  labels:
+    - "testing"
+environment:
+  profile: local
+  browser: chromium
+prerequisites:
+  - "Start the local web application or demo page for the branch under review."
+  - "Prepare an external screenshot, GIF, video, or cast capture tool."
+steps:
+  - id: open-demo-ui
+    instruction: "Open the branch's demo UI in a browser and navigate to the changed flow."
+    expected: "The page loads without a browser error or missing critical asset."
+    evidence:
+      - type: screenshot
+        name: browser-demo-loaded
+  - id: exercise-ui-flow
+    instruction: "Perform the visible UI action that demonstrates the change."
+    expected: "The expected UI state is visible and no error toast appears."
+    evidence:
+      - type: screenshot
+        name: browser-flow-result
+      - type: gif
+        name: browser-flow-demo
+      - type: video
+        name: browser-flow-recording
+result:
+  required_observations:
+    - "The changed UI path is visible in the captured artifact."
+    - "The expected final UI state is observable by reviewers."
+    - "No sensitive local data is visible in the attached artifact."
+recording:
+  mode: browser
+  preferred_formats: ["screenshot", "gif", "video"]
