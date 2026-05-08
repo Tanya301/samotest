@@ -272,6 +272,7 @@ export function formatGateReportMarkdown(report: GateReport): string {
     `Checked: ${report.gate.checked_at}`,
     `Head: ${report.gate.head_sha ?? "unknown"}`,
     `Summary: ${report.gate.summary.passed} passed, ${report.gate.summary.failed} failed, ${report.gate.summary.warned} warned, ${report.gate.summary.waived} waived`,
+    `Review completeness: ${reportHasLocalOnlyArtifacts(report) ? "incomplete - hosted artifact URLs are required before review." : "complete"}`,
   ];
 
   if (isNonEmptyString(report.gate.manifest_url)) {
@@ -541,6 +542,10 @@ function formatArtifactLink(artifact: EvidenceArtifact): string {
   }
 
   return escapeTableCell(artifact.path);
+}
+
+function reportHasLocalOnlyArtifacts(report: GateReport): boolean {
+  return report.errors.some((error) => error.code === "artifact_url_missing");
 }
 
 function formatManifestReference(report: GateReport): string {
