@@ -19,7 +19,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepack": "npm run build",
     "start": "tsx src/cli.ts",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "repository": {
