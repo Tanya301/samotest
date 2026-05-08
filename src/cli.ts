@@ -12,6 +12,7 @@ export interface CliResult {
 
 export interface RunCliOptions {
   cwd?: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
 }
 
 const sprintCommands = [
@@ -148,6 +149,7 @@ async function runGateCheck(args: string[], options: RunCliOptions): Promise<Cli
     cwd: options.cwd,
     baseRef: parsed.base,
     headSha: parsed.head,
+    resolveArtifactUrl: options.resolveArtifactUrl,
   });
 
   if (parsed.format === "json") {

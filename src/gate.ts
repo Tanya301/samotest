@@ -101,6 +101,7 @@ export interface GateCheckOptions {
   headRef?: string;
   headSha?: string;
   now?: Date;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
 }
 
 export interface GateCheckResult {
@@ -163,6 +164,7 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
   const waiver = manifest.review?.waiver ?? null;
   const errors: GateError[] = [];
   const staleReasons = staleEvidenceReasons(manifest, options);
+  const artifactErrors = await artifactUrlErrors(manifest, required, options.resolveArtifactUrl ?? resolveArtifactUrl);
   const fresh = staleReasons.length === 0;
   let scenarioStatus: ScenarioGateStatus;
   let reason = "Evidence passed and matches the requested refs.";
@@ -175,9 +177,22 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
     });
   }
 
+  errors.push(...artifactErrors);
+
   if (!fresh) {
     scenarioStatus = "fail";
     reason = staleReasons[0] ?? "Evidence was captured for a different commit.";
+  } else if (artifactErrors.length > 0) {
+    scenarioStatus = required ? "fail" : "warn";
+    reason = artifactErrors[0]?.message ?? "An artifact URL required for review cannot be resolved.";
+  } else if (required && !isNonEmptyString(manifest.run.finished_at)) {
+    scenarioStatus = "fail";
+    reason = "Required evidence must include run.finished_at.";
+    errors.push({
+      code: "unfinished_evidence",
+      message: reason,
+      scenario_id: manifest.run.scenario_id,
+    });
   } else if (manifest.run.status === "passed") {
     scenarioStatus = "pass";
   } else if (manifest.run.status === "waived") {
@@ -245,9 +260,79 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
   };
 
   return {
-    exitCode: status === "fail" ? 1 : 0,
+    exitCode: artifactErrors.length > 0 ? 4 : status === "fail" ? 1 : 0,
     report,
   };
+}
+
+async function artifactUrlErrors(
+  manifest: EvidenceManifest,
+  required: boolean,
+  resolveUrl: (url: string) => Promise<boolean>,
+): Promise<GateError[]> {
+  if (!required) {
+    return [];
+  }
+
+  const errors: GateError[] = [];
+
+  for (const artifact of manifest.artifacts ?? []) {
+    if (!isNonEmptyString(artifact.url)) {
+      errors.push({
+        code: "artifact_url_missing",
+        message: `Artifact ${artifact.path} is missing a URL required for review.`,
+        scenario_id: manifest.run.scenario_id,
+      });
+      continue;
+    }
+
+    if (!(await resolveUrl(artifact.url))) {
+      errors.push({
+        code: "artifact_url_unresolved",
+        message: `Artifact URL cannot be resolved: ${artifact.url}`,
+        scenario_id: manifest.run.scenario_id,
+      });
+    }
+  }
+
+  return errors;
+}
+
+async function resolveArtifactUrl(url: string): Promise<boolean> {
+  const timeout = AbortSignal.timeout(5000);
+
+  try {
+    const head = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: timeout,
+    });
+
+    if (head.ok) {
+      return true;
+    }
+
+    if (head.status !== 405 && head.status !== 403) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  try {
+    const get = await fetch(url, {
+      method: "GET",
+      headers: {
+        Range: "bytes=0-0",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000),
+    });
+
+    return get.ok || get.status === 206;
+  } catch {
+    return false;
+  }
 }
 
 function validateManifest(value: unknown): GateError | null {

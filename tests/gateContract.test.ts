@@ -52,6 +52,7 @@ describe("gate check samorev contract", () => {
         headRef: "feature/gate",
         headSha: "abc123",
         cwd,
+        resolveArtifactUrl: async () => true,
       });
 
       assert.equal(result.exitCode, 0);
@@ -96,7 +97,7 @@ describe("gate check samorev contract", () => {
       async ({ cwd, manifestPath }) => {
         const cli = await runCli(
           ["gate", "check", "--manifest", manifestPath, "--head", "abc123", "--format", "json"],
-          { cwd },
+          { cwd, resolveArtifactUrl: async () => true },
         );
         const report = JSON.parse(cli.stdout);
 
@@ -124,7 +125,7 @@ describe("gate check samorev contract", () => {
       async ({ cwd, manifestPath }) => {
         const cli = await runCli(
           ["gate", "check", "--manifest", manifestPath, "--head", "abc123", "--format", "json"],
-          { cwd },
+          { cwd, resolveArtifactUrl: async () => true },
         );
         const report = JSON.parse(cli.stdout);
 
@@ -142,7 +143,7 @@ describe("gate check samorev contract", () => {
     await withManifest(baseManifest, async ({ cwd, manifestPath }) => {
       const cli = await runCli(
         ["gate", "check", "--manifest", manifestPath, "--head", "def456", "--format", "json"],
-        { cwd },
+        { cwd, resolveArtifactUrl: async () => true },
       );
       const report = JSON.parse(cli.stdout);
 
@@ -174,6 +175,46 @@ describe("gate check samorev contract", () => {
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("exits 1 and reports incomplete evidence when required passed evidence has no finished_at", async () => {
+    const { finished_at: _finishedAt, ...unfinishedRun } = baseManifest.run;
+
+    await withManifest(
+      {
+        ...baseManifest,
+        run: unfinishedRun,
+      },
+      async ({ cwd, manifestPath }) => {
+        const cli = await runCli(
+          ["gate", "check", "--manifest", manifestPath, "--head", "abc123", "--format", "json"],
+          { cwd, resolveArtifactUrl: async () => true },
+        );
+        const report = JSON.parse(cli.stdout);
+
+        assert.equal(cli.exitCode, 1);
+        assert.equal(report.gate.status, "fail");
+        assert.equal(report.gate.summary.failed, 1);
+        assert.equal(report.scenarios[0]?.status, "fail");
+        assert.equal(report.errors[0]?.code, "unfinished_evidence");
+      },
+    );
+  });
+
+  it("exits 4 and reports fail when a required artifact URL cannot be resolved", async () => {
+    await withManifest(baseManifest, async ({ cwd, manifestPath }) => {
+      const cli = await runCli(
+        ["gate", "check", "--manifest", manifestPath, "--head", "abc123", "--format", "json"],
+        { cwd, resolveArtifactUrl: async () => false },
+      );
+      const report = JSON.parse(cli.stdout);
+
+      assert.equal(cli.exitCode, 4);
+      assert.equal(report.gate.status, "fail");
+      assert.equal(report.gate.summary.failed, 1);
+      assert.equal(report.scenarios[0]?.status, "fail");
+      assert.equal(report.errors[0]?.code, "artifact_url_unresolved");
+    });
   });
 });
 
