@@ -13,6 +13,9 @@
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "tsx": "^4.19.4",
