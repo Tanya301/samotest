@@ -75,6 +75,8 @@ Check the evidence gate in the stable JSON format consumed by `samorev`:
 samotest gate check --manifest samples/evidence/sprint1-cli-smoke/manifest.json --format json
 ```
 
+The committed sample manifest uses immutable raw GitHub URLs so this local quickstart can pass before the package is published. For real PR/MR review evidence, required artifacts still need provider-uploaded, reviewer-accessible URLs; local file paths alone are not enough for the gate.
+
 Package or report evidence:
 
 ```sh

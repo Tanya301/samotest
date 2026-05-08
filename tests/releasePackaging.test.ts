@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
@@ -44,4 +47,60 @@ describe("release packaging", () => {
     assert.match(workflow, /run: npm run typecheck/);
     assert.match(workflow, /run: npm run build/);
   });
+
+  it("packs and installs a working samotest --version bin", async () => {
+    const cwd = process.cwd();
+    const tempDir = await mkdtemp(join(tmpdir(), "samotest-package-smoke-"));
+    const installDir = join(tempDir, "install");
+
+    try {
+      await run("npm", ["run", "build"], { cwd });
+      const pack = await run("npm", ["pack", "--pack-destination", tempDir, "--json"], { cwd });
+      const [{ filename }] = JSON.parse(pack.stdout) as Array<{ filename: string }>;
+
+      await run("npm", ["init", "-y"], { cwd: installDir, createCwd: true });
+      await run("npm", ["install", join(tempDir, filename)], { cwd: installDir });
+
+      const bin = await run(join(installDir, "node_modules/.bin/samotest"), ["--version"], { cwd: installDir });
+
+      assert.equal(bin.stdout, "0.1.0\n");
+      assert.equal(bin.stderr, "");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
+
+async function run(
+  command: string,
+  args: string[],
+  options: { cwd: string; createCwd?: boolean },
+): Promise<{ stdout: string; stderr: string }> {
+  if (options.createCwd) {
+    await mkdir(options.cwd, { recursive: true });
+  }
+
+  const child = spawn(command, args, {
+    cwd: options.cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+
+  assert.equal(exitCode, 0, `${command} ${args.join(" ")} failed\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`);
+  return { stdout, stderr };
+}
