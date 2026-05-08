@@ -37,6 +37,34 @@ describe("samotest CLI", () => {
     }
   });
 
+  it("validates a scenario file from the CLI", async () => {
+    const result = await runCli([
+      "scenario",
+      "validate",
+      "tests/fixtures/scenarios/valid-checkout.yaml",
+    ]);
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.match(result.stdout, /Valid scenario: checkout-discount-demo/);
+    assert.match(result.stdout, /tests\/fixtures\/scenarios\/valid-checkout\.yaml/);
+    assert.equal(result.stderr, "");
+  });
+
+  it("returns actionable CLI output for an invalid scenario file", async () => {
+    const result = await runCli([
+      "scenario",
+      "validate",
+      "tests/fixtures/scenarios/invalid-missing-fields.yaml",
+    ]);
+
+    assert.equal(result.exitCode, 3);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /Invalid scenario: tests\/fixtures\/scenarios\/invalid-missing-fields\.yaml/);
+    assert.match(result.stderr, /title/);
+    assert.match(result.stderr, /steps/);
+    assert.match(result.stderr, /result\.required_observations/);
+  });
+
   it("runs a scenario non-interactively and records step statuses, notes, and attachments", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
