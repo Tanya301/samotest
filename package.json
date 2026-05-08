@@ -3,10 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "samotest": "dist/cli.js"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "tsx src/cli.ts",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "license": "MIT",
   "dependencies": {
     "yaml": "^2.7.0"
   },
