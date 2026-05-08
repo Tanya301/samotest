@@ -72,7 +72,7 @@ interface EvidencePackageArgs {
 
 interface EvidenceUploadArgs {
   path?: string;
-  provider?: "github" | "gitlab";
+  provider?: string;
   pr?: string;
   mr?: string;
   repo?: string;
@@ -96,10 +96,12 @@ interface Attachment {
 }
 
 type EvidenceKind = "screenshot" | "gif" | "video" | "cast" | "log" | "note";
+type UploadProvider = "github" | "gitlab";
 type StepStatus = "passed" | "failed" | "blocked" | "skipped" | "waived";
 
 const stepStatuses = new Set<StepStatus>(["passed", "failed", "blocked", "skipped", "waived"]);
 const evidenceKinds = new Set<EvidenceKind>(["screenshot", "gif", "video", "cast", "log", "note"]);
+const uploadProviders = new Set<UploadProvider>(["github", "gitlab"]);
 
 export async function runCli(args: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -516,12 +518,13 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
     };
   }
 
-  const provider = parsed.provider ?? providerFromManifest(inspection.manifest.review?.provider);
-  if (!provider) {
+  const rawProvider = parsed.provider ?? inspection.manifest.review?.provider;
+  const provider = parseUploadProvider(rawProvider);
+  if (!provider.ok) {
     return {
       exitCode: 3,
       stdout: "",
-      stderr: "Missing required option --provider github|gitlab\n",
+      stderr: `${provider.error}\n`,
     };
   }
 
@@ -531,29 +534,33 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
     resolveArtifactUrl: options.resolveArtifactUrl,
   });
   const body = formatGateReportMarkdown(gate.report);
-  const fallbackPath = parsed.output ?? join(cwd, ".samotest", "evidence", `${inspection.manifest.run.id}-${provider}-comment.md`);
+  const fallbackPath =
+    parsed.output ?? join(cwd, ".samotest", "evidence", `${inspection.manifest.run.id}-${provider.value}-comment.md`);
   await mkdir(dirname(fallbackPath), { recursive: true });
   await writeFile(fallbackPath, body, "utf8");
 
   if (parsed.dryRun) {
     return {
       exitCode: 0,
-      stdout: `Prepared ${provider} comment markdown at ${fallbackPath}\nDry run: no comment posted.\n`,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nDry run: no comment posted.\n`,
       stderr: "",
     };
   }
 
-  const target = provider === "github" ? parsed.pr ?? inspection.manifest.review?.pr : parsed.mr ?? inspection.manifest.review?.mr;
+  const target =
+    provider.value === "github" ? parsed.pr ?? inspection.manifest.review?.pr : parsed.mr ?? inspection.manifest.review?.mr;
   if (!target) {
     return {
       exitCode: 0,
-      stdout: `Prepared ${provider} comment markdown at ${fallbackPath}\nNo ${provider === "github" ? "--pr" : "--mr"} target was provided, so no comment was posted.\n`,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nNo ${
+        provider.value === "github" ? "--pr" : "--mr"
+      } target was provided, so no comment was posted.\n`,
       stderr: "",
     };
   }
 
   const posted = await postProviderComment({
-    provider,
+    provider: provider.value,
     target,
     repo: parsed.repo ?? inspection.manifest.source.repo,
     bodyPath: fallbackPath,
@@ -562,14 +569,14 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
   if (!posted.ok) {
     return {
       exitCode: 0,
-      stdout: `Prepared ${provider} comment markdown at ${fallbackPath}\n${posted.reason}\n`,
+      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\n${posted.reason}\n`,
       stderr: "",
     };
   }
 
   return {
     exitCode: 0,
-    stdout: `Posted ${provider} comment to ${target}\nSaved comment markdown at ${fallbackPath}\n`,
+    stdout: `Posted ${provider.value} comment to ${target}\nSaved comment markdown at ${fallbackPath}\n`,
     stderr: "",
   };
 }
@@ -631,7 +638,7 @@ function parseEvidenceUploadArgs(args: string[]): EvidenceUploadArgs {
     const next = args[index + 1];
 
     if (arg === "--provider") {
-      parsed.provider = next as EvidenceUploadArgs["provider"];
+      parsed.provider = next;
       index += 1;
     } else if (arg === "--pr") {
       parsed.pr = next;
@@ -655,16 +662,20 @@ function parseEvidenceUploadArgs(args: string[]): EvidenceUploadArgs {
   return parsed;
 }
 
-function providerFromManifest(provider: string | undefined): "github" | "gitlab" | undefined {
-  if (provider === "github" || provider === "gitlab") {
-    return provider;
+function parseUploadProvider(provider: string | undefined): { ok: true; value: UploadProvider } | { ok: false; error: string } {
+  if (!provider) {
+    return { ok: false, error: "Missing required option --provider github|gitlab" };
   }
 
-  return undefined;
+  if (uploadProviders.has(provider as UploadProvider)) {
+    return { ok: true, value: provider as UploadProvider };
+  }
+
+  return { ok: false, error: `Unsupported provider "${provider}". Supported providers: github, gitlab` };
 }
 
 async function postProviderComment(options: {
-  provider: "github" | "gitlab";
+  provider: UploadProvider;
   target: string;
   repo?: string;
   bodyPath: string;
