@@ -69,4 +69,38 @@ describe("samotest gate report", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("marks local-only artifact evidence as review-incomplete", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-report-"));
+    const manifestPath = join(cwd, "manifest.json");
+    const localOnlyManifest: EvidenceManifest = {
+      ...manifest,
+      artifacts: [
+        {
+          type: "log",
+          name: "gate-contract",
+          path: "artifacts/gate-contract.log",
+          sha256: "0123456789abcdef",
+        },
+      ],
+      review: {},
+    };
+
+    try {
+      await writeFile(manifestPath, `${JSON.stringify(localOnlyManifest, null, 2)}\n`, "utf8");
+
+      const result = await runCli(
+        ["gate", "report", "--manifest", manifestPath, "--head", "abc123", "--format", "markdown"],
+        { cwd, resolveArtifactUrl: async () => false },
+      );
+
+      assert.equal(result.exitCode, 4);
+      assert.match(result.stdout, /## samotest evidence gate: fail/);
+      assert.match(result.stdout, /Review completeness: incomplete - hosted artifact URLs are required before review\./);
+      assert.match(result.stdout, /artifact_url_missing: Artifact artifacts\/gate-contract\.log is missing a URL required for review\./);
+      assert.equal(result.stderr, "");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });

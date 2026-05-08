@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { access, copyFile, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
-import { platform } from "node:os";
+import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { platform, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -134,11 +134,24 @@ interface EvidencePackageArgs {
 interface EvidenceUploadArgs {
   path?: string;
   provider?: string;
+  issue?: string;
   pr?: string;
   mr?: string;
   repo?: string;
   dryRun: boolean;
   output?: string;
+}
+
+interface UploadTarget {
+  provider: UploadProvider;
+  kind: "issue" | "merge_request" | "pull_request";
+  id: string;
+}
+
+interface GitLabUploadResult {
+  localPath: string;
+  markdown: string;
+  url: string;
 }
 
 interface RunCommandArgs {
@@ -991,33 +1004,50 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
     parsed.output ?? join(cwd, ".samotest", "evidence", `${inspection.manifest.run.id}-${provider.value}-comment.md`);
   await mkdir(dirname(fallbackPath), { recursive: true });
   await writeFile(fallbackPath, body, "utf8");
+  const project = parsed.repo ?? inspection.manifest.source.repo;
+  const target = resolveUploadTarget(provider.value, parsed, inspection.manifest.review);
 
   if (parsed.dryRun) {
     return {
       exitCode: 0,
-      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nDry run: no comment posted.\n`,
+      stdout: formatUploadDryRun({
+        provider: provider.value,
+        target,
+        project,
+        manifestPath: inspection.manifest_path,
+        artifacts: inspection.manifest.artifacts ?? [],
+        markdownPath: fallbackPath,
+        markdown: body,
+      }),
       stderr: "",
     };
   }
 
-  const target =
-    provider.value === "github" ? parsed.pr ?? inspection.manifest.review?.pr : parsed.mr ?? inspection.manifest.review?.mr;
   if (!target) {
     return {
       exitCode: 0,
       stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\nNo ${
-        provider.value === "github" ? "--pr" : "--mr"
+        provider.value === "github" ? "--pr" : "--issue or --mr"
       } target was provided, so no comment was posted.\n`,
       stderr: "",
     };
   }
 
-  const posted = await postProviderComment({
-    provider: provider.value,
-    target,
-    repo: parsed.repo ?? inspection.manifest.source.repo,
-    bodyPath: fallbackPath,
-  });
+  const posted = provider.value === "gitlab"
+    ? await postGitLabEvidence({
+      target,
+      project,
+      manifestPath: inspection.manifest_path,
+      artifacts: inspection.manifest.artifacts ?? [],
+      bodyPath: fallbackPath,
+      resolveArtifactUrl: options.resolveArtifactUrl,
+    })
+    : await postProviderComment({
+      provider: provider.value,
+      target: target.id,
+      repo: project,
+      bodyPath: fallbackPath,
+    });
 
   if (!posted.ok) {
     return {
@@ -1029,7 +1059,7 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
 
   return {
     exitCode: 0,
-    stdout: `Posted ${provider.value} comment to ${target}\nSaved comment markdown at ${fallbackPath}\n`,
+    stdout: `Posted ${provider.value} comment to ${target.kind} ${target.id}\nSaved comment markdown at ${fallbackPath}\n`,
     stderr: "",
   };
 }
@@ -1093,6 +1123,9 @@ function parseEvidenceUploadArgs(args: string[]): EvidenceUploadArgs {
     if (arg === "--provider") {
       parsed.provider = next;
       index += 1;
+    } else if (arg === "--issue") {
+      parsed.issue = next;
+      index += 1;
     } else if (arg === "--pr") {
       parsed.pr = next;
       index += 1;
@@ -1127,6 +1160,81 @@ function parseUploadProvider(provider: string | undefined): { ok: true; value: U
   return { ok: false, error: `Unsupported provider "${provider}". Supported providers: github, gitlab` };
 }
 
+function resolveUploadTarget(
+  provider: UploadProvider,
+  parsed: EvidenceUploadArgs,
+  review: Record<string, unknown> | undefined,
+): UploadTarget | null {
+  if (provider === "github") {
+    const id = parsed.pr ?? stringRecordValue(review, "pr");
+    return id ? { provider, kind: "pull_request", id } : null;
+  }
+
+  const issue = parsed.issue ?? stringRecordValue(review, "issue");
+  if (issue) {
+    return { provider, kind: "issue", id: issue };
+  }
+
+  const mr = parsed.mr ?? stringRecordValue(review, "mr");
+  return mr ? { provider, kind: "merge_request", id: mr } : null;
+}
+
+function formatUploadDryRun(options: {
+  provider: UploadProvider;
+  target: UploadTarget | null;
+  project?: string;
+  manifestPath: string;
+  artifacts: Array<{ path: string }>;
+  markdownPath: string;
+  markdown: string;
+}): string {
+  const lines = [
+    `Provider: ${options.provider}`,
+    `Target: ${options.target ? `${options.target.kind} ${options.target.id}` : "missing"}`,
+    `Project: ${options.project ?? "missing"}`,
+  ];
+
+  if (options.provider === "gitlab") {
+    for (const artifact of options.artifacts) {
+      lines.push(`Upload action: POST /projects/:id/uploads ${artifact.path}`);
+    }
+    lines.push("Upload action: POST /projects/:id/uploads manifest.json");
+    lines.push(`Comment action: ${formatGitLabCommentAction(options.target)}`);
+    for (const artifact of options.artifacts) {
+      lines.push(`Artifact URL required: ${artifact.path} -> hosted GitLab upload URL`);
+    }
+    lines.push("Manifest URL required: manifest.json -> hosted GitLab upload URL");
+  } else {
+    lines.push(`Comment action: gh pr comment ${options.target?.id ?? "<missing>"} --body-file ${options.markdownPath}`);
+    for (const artifact of options.artifacts) {
+      lines.push(`Artifact URL required: ${artifact.path} -> hosted URL`);
+    }
+    lines.push("Manifest URL required: manifest.json -> hosted URL");
+  }
+
+  lines.push(
+    `Markdown output: ${options.markdownPath}`,
+    "Dry run: no uploads or comments were posted.",
+    "",
+    "Markdown:",
+    options.markdown,
+  );
+
+  return lines.join("\n");
+}
+
+function formatGitLabCommentAction(target: UploadTarget | null): string {
+  if (!target) {
+    return "POST /projects/:id/<issue-or-merge-request>/<iid>/notes";
+  }
+
+  if (target.kind === "issue") {
+    return `POST /projects/:id/issues/${target.id}/notes`;
+  }
+
+  return `POST /projects/:id/merge_requests/${target.id}/notes`;
+}
+
 async function postProviderComment(options: {
   provider: UploadProvider;
   target: string;
@@ -1158,6 +1266,219 @@ async function postProviderComment(options: {
   }
 
   return postCommand("glab", args);
+}
+
+async function postGitLabEvidence(options: {
+  target: UploadTarget;
+  project?: string;
+  manifestPath: string;
+  artifacts: Array<{ path: string }>;
+  bodyPath: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!options.project) {
+    return { ok: false, reason: "GitLab project is required for uploads; local markdown fallback was written." };
+  }
+
+  const token = process.env.GITLAB_TOKEN ?? process.env.GLAB_TOKEN;
+  if (!token) {
+    return { ok: false, reason: "GITLAB_TOKEN or GLAB_TOKEN is required for GitLab uploads; local markdown fallback was written." };
+  }
+
+  const baseUrl = (process.env.GITLAB_URL ?? "https://gitlab.com").replace(/\/$/, "");
+  const runDir = dirname(options.manifestPath);
+  const uploadedArtifacts: GitLabUploadResult[] = [];
+
+  for (const artifact of options.artifacts) {
+    const upload = await uploadGitLabFile({
+      baseUrl,
+      token,
+      project: options.project,
+      filePath: join(runDir, artifact.path),
+      localPath: artifact.path,
+    });
+    if (!upload.ok) {
+      return { ok: false, reason: upload.reason };
+    }
+    uploadedArtifacts.push(upload.value);
+  }
+
+  const originalManifest = JSON.parse(await readFile(options.manifestPath, "utf8")) as Record<string, unknown>;
+  const artifacts = withHostedArtifactUrls(originalManifest.artifacts, uploadedArtifacts, baseUrl);
+  const tempDir = await mkdtemp(join(tmpdir(), "samotest-gitlab-upload-"));
+  const manifestUploadPath = join(tempDir, "manifest.json");
+  const uploadedManifest = { ...originalManifest, artifacts };
+  await writeFile(manifestUploadPath, `${JSON.stringify(uploadedManifest, null, 2)}\n`, "utf8");
+
+  const manifestUpload = await uploadGitLabFile({
+    baseUrl,
+    token,
+    project: options.project,
+    filePath: manifestUploadPath,
+    localPath: "manifest.json",
+  });
+  if (!manifestUpload.ok) {
+    return { ok: false, reason: manifestUpload.reason };
+  }
+
+  const hostedManifestUrl = absoluteGitLabUrl(baseUrl, manifestUpload.value.url);
+  const reportManifestPath = join(tempDir, "manifest-for-report.json");
+  await writeFile(
+    reportManifestPath,
+    `${JSON.stringify(withHostedManifestUrl(uploadedManifest, hostedManifestUrl), null, 2)}\n`,
+    "utf8",
+  );
+  const hostedGate = await checkGate({
+    manifestPath: reportManifestPath,
+    resolveArtifactUrl: options.resolveArtifactUrl ?? (async () => true),
+  });
+  const body = bodyWithGitLabUploads(
+    formatGateReportMarkdown(hostedGate.report),
+    uploadedArtifacts,
+    manifestUpload.value,
+    baseUrl,
+  );
+  await writeFile(options.bodyPath, body, "utf8");
+  const posted = await postGitLabNote({
+    baseUrl,
+    token,
+    project: options.project,
+    target: options.target,
+    body,
+  });
+
+  if (!posted.ok) {
+    return { ok: false, reason: posted.reason };
+  }
+
+  return { ok: true };
+}
+
+function withHostedArtifactUrls(
+  artifacts: unknown,
+  uploadedArtifacts: GitLabUploadResult[],
+  baseUrl: string,
+): unknown {
+  if (!Array.isArray(artifacts)) {
+    return artifacts;
+  }
+
+  return artifacts.map((artifact) => {
+    if (!isRecord(artifact) || !isNonEmptyString(artifact.path)) {
+      return artifact;
+    }
+    const uploaded = uploadedArtifacts.find((candidate) => candidate.localPath === artifact.path);
+    return uploaded ? { ...artifact, url: absoluteGitLabUrl(baseUrl, uploaded.url) } : artifact;
+  });
+}
+
+function withHostedManifestUrl(manifest: Record<string, unknown>, manifestUrl: string): Record<string, unknown> {
+  const review = isRecord(manifest.review) ? manifest.review : {};
+  return {
+    ...manifest,
+    review: {
+      ...review,
+      manifest_url: manifestUrl,
+    },
+  };
+}
+
+async function uploadGitLabFile(options: {
+  baseUrl: string;
+  token: string;
+  project: string;
+  filePath: string;
+  localPath: string;
+}): Promise<{ ok: true; value: GitLabUploadResult } | { ok: false; reason: string }> {
+  const form = new FormData();
+  const data = await readFile(options.filePath);
+  form.set("file", new Blob([data]), basename(options.filePath));
+
+  const response = await fetch(`${options.baseUrl}/api/v4/projects/${encodeURIComponent(options.project)}/uploads`, {
+    method: "POST",
+    headers: gitLabAuthHeaders(options.token),
+    body: form,
+  }).catch((error: Error) => error);
+
+  if (response instanceof Error) {
+    return { ok: false, reason: `GitLab upload failed for ${options.localPath}: ${response.message}` };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `GitLab upload failed for ${options.localPath}: HTTP ${response.status} ${await response.text()}` };
+  }
+
+  const parsed = await response.json() as { markdown?: unknown; url?: unknown; full_path?: unknown };
+  const url = stringValue(parsed.full_path) ?? stringValue(parsed.url);
+  if (!isNonEmptyString(parsed.markdown) || !url) {
+    return { ok: false, reason: `GitLab upload response for ${options.localPath} did not include markdown and url fields.` };
+  }
+
+  return {
+    ok: true,
+    value: {
+      localPath: options.localPath,
+      markdown: parsed.markdown,
+      url,
+    },
+  };
+}
+
+async function postGitLabNote(options: {
+  baseUrl: string;
+  token: string;
+  project: string;
+  target: UploadTarget;
+  body: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const endpoint = options.target.kind === "issue"
+    ? `issues/${encodeURIComponent(options.target.id)}/notes`
+    : `merge_requests/${encodeURIComponent(options.target.id)}/notes`;
+  const response = await fetch(`${options.baseUrl}/api/v4/projects/${encodeURIComponent(options.project)}/${endpoint}`, {
+    method: "POST",
+    headers: {
+      ...gitLabAuthHeaders(options.token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ body: options.body }),
+  }).catch((error: Error) => error);
+
+  if (response instanceof Error) {
+    return { ok: false, reason: `GitLab comment command failed; local markdown fallback was written. ${response.message}` };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `GitLab comment command failed; local markdown fallback was written. HTTP ${response.status} ${await response.text()}` };
+  }
+
+  return { ok: true };
+}
+
+function bodyWithGitLabUploads(
+  body: string,
+  artifacts: GitLabUploadResult[],
+  manifest: GitLabUploadResult,
+  baseUrl: string,
+): string {
+  const lines = [body.trimEnd(), "", "### Hosted GitLab uploads"];
+  for (const artifact of artifacts) {
+    lines.push(`- ${artifact.localPath}: ${absoluteGitLabUrl(baseUrl, artifact.url)}`);
+  }
+  lines.push(`- manifest.json: ${absoluteGitLabUrl(baseUrl, manifest.url)}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function absoluteGitLabUrl(baseUrl: string, url: string): string {
+  if (/^https?:\/\//.test(url)) {
+    return url;
+  }
+  return `${baseUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+function gitLabAuthHeaders(token: string): Record<string, string> {
+  return {
+    "PRIVATE-TOKEN": token,
+  };
 }
 
 async function commandSucceeds(command: string, args: string[]): Promise<boolean> {
@@ -1624,6 +1945,15 @@ function isHttpUrl(value: unknown): value is string {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function stringValue(value: unknown): string | null {
+  return isNonEmptyString(value) ? value : null;
+}
+
+function stringRecordValue(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key];
+  return isNonEmptyString(value) ? value : undefined;
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {

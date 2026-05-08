@@ -82,6 +82,13 @@ export interface GateReport {
       waived: number;
     };
   };
+  evidence: {
+    run_id?: string;
+    scenario_id?: string;
+    command?: string;
+    provider?: string;
+    target?: string;
+  };
   scenarios: Array<{
     id: string;
     required: boolean;
@@ -245,6 +252,7 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
       manifest_url: manifest.review?.manifest_url,
       summary,
     },
+    evidence: evidenceMetadata(manifest),
     scenarios: [
       {
         id: manifest.run.scenario_id,
@@ -271,7 +279,13 @@ export function formatGateReportMarkdown(report: GateReport): string {
     "",
     `Checked: ${report.gate.checked_at}`,
     `Head: ${report.gate.head_sha ?? "unknown"}`,
+    `Run: ${report.evidence.run_id ?? "unknown"}`,
+    `Scenario: ${report.evidence.scenario_id ?? "unknown"}`,
+    `Provider: ${report.evidence.provider ?? "unknown"}`,
+    `Target: ${report.evidence.target ?? "unknown"}`,
+    `Command: ${report.evidence.command ?? "unknown"}`,
     `Summary: ${report.gate.summary.passed} passed, ${report.gate.summary.failed} failed, ${report.gate.summary.warned} warned, ${report.gate.summary.waived} waived`,
+    `Review completeness: ${reportHasLocalOnlyArtifacts(report) ? "incomplete - hosted artifact URLs are required before review." : "complete"}`,
   ];
 
   if (isNonEmptyString(report.gate.manifest_url)) {
@@ -522,9 +536,53 @@ function emptyFailureReport(options: {
         waived: 0,
       },
     },
+    evidence: {},
     scenarios: [],
     errors: [options.error],
   };
+}
+
+function evidenceMetadata(manifest: EvidenceManifest): GateReport["evidence"] {
+  const provider = stringValue(manifest.review?.provider);
+  return {
+    run_id: manifest.run.id,
+    scenario_id: manifest.run.scenario_id,
+    command: stringValue(manifest.review?.command) ?? stringValue(manifest.command),
+    provider,
+    target: formatReviewTarget(provider, manifest.review),
+  };
+}
+
+function formatReviewTarget(provider: string | undefined, review: EvidenceManifest["review"]): string | undefined {
+  if (!review) {
+    return undefined;
+  }
+
+  const issue = stringValue(review.issue);
+  const mr = stringValue(review.mr);
+  const pr = stringValue(review.pr);
+
+  if (provider === "gitlab" && issue) {
+    return `issue ${issue}`;
+  }
+
+  if (provider === "gitlab" && mr) {
+    return `merge_request ${mr}`;
+  }
+
+  if (provider === "github" && pr) {
+    return `pull_request ${pr}`;
+  }
+
+  if (issue) {
+    return `issue ${issue}`;
+  }
+
+  if (mr) {
+    return `merge_request ${mr}`;
+  }
+
+  return pr ? `pull_request ${pr}` : undefined;
 }
 
 function malformed(message: string): GateError {
@@ -541,6 +599,10 @@ function formatArtifactLink(artifact: EvidenceArtifact): string {
   }
 
   return escapeTableCell(artifact.path);
+}
+
+function reportHasLocalOnlyArtifacts(report: GateReport): boolean {
+  return report.errors.some((error) => error.code === "artifact_url_missing");
 }
 
 function formatManifestReference(report: GateReport): string {
@@ -585,4 +647,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return isNonEmptyString(value) ? value : undefined;
 }
