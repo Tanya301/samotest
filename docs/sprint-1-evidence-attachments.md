@@ -1,8 +1,8 @@
 # Sprint 1 Evidence Attachments
 
-Sprint 1 accepts artifacts produced by external tools and records them as attachments during a guided `samotest run`. Native GIF/video generation is deferred.
+Sprint 1 accepted artifacts produced by external tools and recorded them as attachments during a guided `samotest run`. Sprint 3 adds native recorder generation for Playwright browser screenshots/videos, optional `ffmpeg` GIF conversion, and `asciinema` terminal casts.
 
-Use this workflow for screenshots, GIFs, videos, terminal casts, logs, and notes:
+Use this attachment workflow for externally produced screenshots, GIFs, videos, terminal casts, logs, and notes:
 
 1. Produce the artifact with an external tool, such as the OS screenshot utility, a browser capture extension, QuickTime, OBS, asciinema, or a terminal log redirect.
 2. Review the artifact before attaching it. Remove secrets, tokens, private URLs, customer data, and unnecessary desktop context.
@@ -22,4 +22,6 @@ note path/to/notes.md
 6. For manifest-based review, include the artifact inside the evidence bundle's `artifacts/` directory so `manifest.json` can reference it by relative path with a checksum.
 7. Run `samotest evidence inspect <bundle-or-run-id>` before sharing the evidence.
 
-Committed examples in this repository intentionally use a tiny text log fixture. Browser screenshots, GIFs, videos, and casts are documented as accepted external attachments, but native recorder integrations are beyond Sprint 1. Follow-up issue: <https://github.com/Tanya301/samotest/issues/16>.
+Committed examples in this repository intentionally use a tiny text log fixture. Native recorder output should still be reviewed for secrets before sharing, and generated artifacts are written into the evidence bundle with manifest checksums.
+
+For native generation, run `samotest doctor` first. Missing Playwright or `asciinema` dependencies make `record` fail with install guidance; missing `ffmpeg` makes `record --format gif` fall back to browser video when Playwright video recording is available.

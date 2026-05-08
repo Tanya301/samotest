@@ -23,7 +23,7 @@ describe("release packaging", () => {
     assert.equal(scripts.prepack, "npm run build");
   });
 
-  it("documents the current quickstart and release hold", async () => {
+  it("documents the current quickstart and local recorder workflow", async () => {
     const readme = await readFile("README.md", "utf8");
 
     assert.match(readme, /npm link/);
@@ -33,8 +33,10 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /issue #20/);
-    assert.match(readme, /no release tag should be created until Sprint 2 closeout/);
+    assert.match(readme, /v0\.1\.0 is released/);
+    assert.match(readme, /samotest doctor/);
+    assert.match(readme, /samotest record my-browser-scenario --format video/);
+    assert.match(readme, /record --format gif.*video fallback evidence/);
   });
 
   it("runs the required PR workflow commands", async () => {

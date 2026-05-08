@@ -36,4 +36,5 @@ result:
     - "Attached log evidence is small and reviewable."
 recording:
   mode: terminal
+  command: "npm start -- --help"
   preferred_formats: ["cast"]
