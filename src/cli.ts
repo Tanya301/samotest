@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+import { execFile } from "node:child_process";
 import { access, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { platform } from "node:os";
 import { basename, extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
-import { formatEvidenceInspectionText, inspectEvidence } from "./evidence.js";
+import { formatEvidenceInspectionText, inspectEvidence, writeEvidenceManifest } from "./evidence.js";
 import { checkGate } from "./gate.js";
 import { validateScenarioFile } from "./scenarioValidation.js";
 import type { ScenarioDefinition, ScenarioStep } from "./scenarioValidation.js";
@@ -18,7 +21,32 @@ export interface RunCliOptions {
   cwd?: string;
   stdin?: string;
   resolveArtifactUrl?: (url: string) => Promise<boolean>;
+  recorderDoctor?: () => Promise<RecorderDoctorResult>;
+  screenshotRecorder?: ScreenshotRecorder;
+  now?: () => Date;
 }
+
+export interface RecorderAvailability {
+  available: boolean;
+  tool: string;
+  detail: string;
+}
+
+export interface RecorderDoctorResult {
+  screenshot: RecorderAvailability;
+  cast: RecorderAvailability;
+}
+
+export interface ScreenshotRecorderInput {
+  url: string;
+  outputPath: string;
+}
+
+export interface ScreenshotRecorderResult {
+  browser?: string;
+}
+
+export type ScreenshotRecorder = (input: ScreenshotRecorderInput) => Promise<ScreenshotRecorderResult>;
 
 const sprintCommands = [
   "samotest init",
@@ -71,6 +99,13 @@ interface RunCommandArgs {
   nonInteractive: boolean;
 }
 
+interface RecordCommandArgs {
+  scenarioId?: string;
+  output: string;
+  runId?: string;
+  format: "screenshot" | "gif" | "video" | "cast";
+}
+
 interface Attachment {
   kind: EvidenceKind;
   path: string;
@@ -81,6 +116,7 @@ type StepStatus = "passed" | "failed" | "blocked" | "skipped" | "waived";
 
 const stepStatuses = new Set<StepStatus>(["passed", "failed", "blocked", "skipped", "waived"]);
 const evidenceKinds = new Set<EvidenceKind>(["screenshot", "gif", "video", "cast", "log", "note"]);
+const execFileAsync = promisify(execFile);
 
 export async function runCli(args: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -109,6 +145,14 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
 
   if (command === "run") {
     return runScenario(args.slice(1), options);
+  }
+
+  if (command === "doctor") {
+    return runDoctor(options);
+  }
+
+  if (command === "record") {
+    return runRecord(args.slice(1), options);
   }
 
   if (isReviewedPlaceholder(command, subcommand)) {
@@ -280,12 +324,139 @@ async function ensureGitignoreEntry(path: string, entry: string): Promise<void> 
 function isReviewedPlaceholder(command: string, subcommand?: string): boolean {
   return (
     command === "run" ||
-    command === "record" ||
-    command === "doctor" ||
     (command === "scenario" && (subcommand === "list" || subcommand === "validate")) ||
     (command === "evidence" && ["package", "upload"].includes(subcommand ?? "")) ||
     (command === "gate" && subcommand === "report")
   );
+}
+
+async function runDoctor(options: RunCliOptions): Promise<CliResult> {
+  const doctor = options.recorderDoctor ? await options.recorderDoctor() : await detectRecorderAvailability();
+  return {
+    exitCode: 0,
+    stdout: formatDoctorOutput(doctor),
+    stderr: "",
+  };
+}
+
+async function runRecord(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const parsed = parseRecordArgs(args);
+
+  if (!parsed.scenarioId) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required argument <scenario-id>\n",
+    };
+  }
+
+  if (!["screenshot", "gif", "video", "cast"].includes(parsed.format)) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Invalid --format. Expected screenshot, gif, video, or cast.\n",
+    };
+  }
+
+  if (parsed.format !== "screenshot") {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `${parsed.format} recording is not implemented in this slice. Use an external recorder and attach the artifact with samotest run, or check availability with samotest doctor.\n`,
+    };
+  }
+
+  const loaded = await loadScenario(cwd, parsed.scenarioId);
+  if (!loaded.ok) {
+    return {
+      exitCode: loaded.exitCode,
+      stdout: "",
+      stderr: loaded.error,
+    };
+  }
+
+  const url = findBrowserScenarioUrl(loaded.scenario);
+  if (!url) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: `Scenario ${loaded.scenario.id} does not define a browser URL for screenshot recording.\n`,
+    };
+  }
+
+  if (!options.screenshotRecorder) {
+    const doctor = options.recorderDoctor ? await options.recorderDoctor() : await detectRecorderAvailability();
+    if (!doctor.screenshot.available) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `Screenshot recorder unavailable: ${doctor.screenshot.detail}\n`,
+      };
+    }
+  }
+
+  const now = options.now ? options.now() : new Date();
+  const runId = parsed.runId ?? `record-${now.toISOString().replace(/[:.]/g, "-")}`;
+  const outputRoot = isAbsolute(parsed.output) ? parsed.output : join(cwd, parsed.output);
+  const runDir = join(outputRoot, runId);
+  const artifactsDir = join(runDir, "artifacts");
+  const screenshotPath = join(artifactsDir, "screenshot.png");
+
+  await mkdir(artifactsDir, { recursive: true });
+  const recorder = options.screenshotRecorder ?? recordScreenshotWithPlaywright;
+  let recorderResult: ScreenshotRecorderResult;
+  try {
+    recorderResult = await recorder({ url, outputPath: screenshotPath });
+  } catch (error) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: `Screenshot recorder failed: ${formatError(error)}\n`,
+    };
+  }
+
+  const finishedAt = (options.now ? options.now() : new Date()).toISOString();
+  const commit = await currentCommit(cwd);
+  await writeEvidenceManifest({
+    runDir,
+    run: {
+      id: runId,
+      scenario_id: loaded.scenario.id,
+      status: "passed",
+      started_at: now.toISOString(),
+      finished_at: finishedAt,
+      required: loaded.scenario.priority === "required",
+    },
+    source: {
+      commit,
+    },
+    environment: {
+      os: platform(),
+      browser: recorderResult.browser ?? "playwright",
+      redacted: true,
+    },
+    artifacts: [
+      {
+        type: "screenshot",
+        name: `${loaded.scenario.id}-screenshot`,
+        path: screenshotPath,
+      },
+    ],
+    observations: [
+      {
+        step_id: firstStepId(loaded.scenario),
+        status: "passed",
+        note: `Captured browser screenshot for ${url}.`,
+      },
+    ],
+  });
+
+  return {
+    exitCode: 0,
+    stdout: `Recorded screenshot evidence ${runId} at ${join(parsed.output, runId, "manifest.json")}\n`,
+    stderr: "",
+  };
 }
 
 async function runEvidenceInspect(args: string[], options: RunCliOptions): Promise<CliResult> {
@@ -462,6 +633,33 @@ function parseRunArgs(args: string[]): RunCommandArgs {
   return parsed;
 }
 
+function parseRecordArgs(args: string[]): RecordCommandArgs {
+  const parsed: RecordCommandArgs = {
+    output: ".samotest/evidence",
+    format: "screenshot",
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--output") {
+      parsed.output = next;
+      index += 1;
+    } else if (arg === "--run-id") {
+      parsed.runId = next;
+      index += 1;
+    } else if (arg === "--format") {
+      parsed.format = next as RecordCommandArgs["format"];
+      index += 1;
+    } else if (!arg.startsWith("-") && !parsed.scenarioId) {
+      parsed.scenarioId = arg;
+    }
+  }
+
+  return parsed;
+}
+
 async function loadScenario(
   cwd: string,
   scenarioId: string,
@@ -590,6 +788,139 @@ function allowsWaive(step: ScenarioStep): boolean {
 
 function toStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function formatDoctorOutput(result: RecorderDoctorResult): string {
+  const lines = ["Recorder availability"];
+  for (const [name, availability] of Object.entries(result)) {
+    lines.push(
+      `${name.padEnd(10)} ${availability.available ? "available" : "missing"} ${availability.tool} - ${availability.detail}`,
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+async function detectRecorderAvailability(): Promise<RecorderDoctorResult> {
+  const [screenshot, cast] = await Promise.all([
+    detectPlaywrightScreenshotSupport(),
+    detectAsciinemaSupport(),
+  ]);
+
+  return {
+    screenshot,
+    cast,
+  };
+}
+
+async function detectPlaywrightScreenshotSupport(): Promise<RecorderAvailability> {
+  try {
+    const playwright = await importOptionalPackage("playwright");
+    const browser = await playwright.chromium.launch({ headless: true });
+    await browser.close();
+    return {
+      available: true,
+      tool: "Playwright",
+      detail: "Chromium browser can launch for screenshots.",
+    };
+  } catch (error) {
+    return {
+      available: false,
+      tool: "Playwright",
+      detail: `Install playwright and a browser with \`npm install -D playwright && npx playwright install chromium\`. Detected error: ${formatError(error)}`,
+    };
+  }
+}
+
+async function detectAsciinemaSupport(): Promise<RecorderAvailability> {
+  try {
+    const { stdout } = await execFileAsync("asciinema", ["--version"]);
+    return {
+      available: true,
+      tool: "asciinema",
+      detail: stdout.trim() || "asciinema is on PATH.",
+    };
+  } catch {
+    return {
+      available: false,
+      tool: "asciinema",
+      detail: "Install asciinema to record terminal casts; cast generation is detected but stubbed in this slice.",
+    };
+  }
+}
+
+async function recordScreenshotWithPlaywright(input: ScreenshotRecorderInput): Promise<ScreenshotRecorderResult> {
+  const playwright = await importOptionalPackage("playwright");
+  const browser = await playwright.chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: 30_000 });
+    await page.screenshot({ path: input.outputPath, fullPage: true });
+  } finally {
+    await browser.close();
+  }
+
+  return {
+    browser: "chromium",
+  };
+}
+
+async function importOptionalPackage(specifier: string): Promise<any> {
+  const dynamicImport = new Function("specifier", "return import(specifier)") as (moduleSpecifier: string) => Promise<any>;
+  return dynamicImport(specifier);
+}
+
+async function currentCommit(cwd: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd });
+    const commit = stdout.trim();
+    return commit || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function findBrowserScenarioUrl(scenario: ScenarioDefinition): string | null {
+  const candidates = [
+    scenario.url,
+    scenario.browser,
+    isRecord(scenario.browser) ? scenario.browser.url : undefined,
+    scenario.target,
+    isRecord(scenario.target) ? scenario.target.url : undefined,
+    isRecord(scenario.app) ? scenario.app.url : undefined,
+  ];
+
+  for (const candidate of candidates) {
+    if (isHttpUrl(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const step of scenario.steps) {
+    const record = step as Record<string, unknown>;
+    if (isHttpUrl(record.url)) {
+      return record.url;
+    }
+  }
+
+  return null;
+}
+
+function firstStepId(scenario: ScenarioDefinition): string | undefined {
+  return scenario.steps[0]?.id ?? "screenshot";
+}
+
+function isHttpUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function summarizeRunStatus(statuses: StepStatus[]): StepStatus {
