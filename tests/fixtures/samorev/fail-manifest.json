@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.0"
+  },
+  "run": {
+    "id": "run-fail",
+    "scenario_id": "checkout-discount-demo",
+    "status": "failed",
+    "started_at": "2026-05-08T19:05:00Z",
+    "finished_at": "2026-05-08T19:08:41Z",
+    "required": true
+  },
+  "source": {
+    "repo": "Tanya301/samotest",
+    "base_ref": "main",
+    "head_ref": "codex/issue-21-samorev-integration",
+    "commit": "def456"
+  },
+  "artifacts": [
+    {
+      "type": "log",
+      "name": "gate-contract",
+      "path": "artifacts/gate-contract.log",
+      "sha256": "0123456789abcdef",
+      "url": "https://example.test/evidence/fail/artifacts/gate-contract.log"
+    }
+  ],
+  "review": {
+    "manifest_url": "https://example.test/evidence/fail/manifest.json"
+  }
+}

@@ -339,8 +339,9 @@ The GitLab job artifact retention period must be at least 30 days or the project
 
 Expected integration contract:
 
-- `samotest gate check --manifest <path> --format json` is the Sprint 1 machine contract for `samorev`.
+- `samotest gate check --manifest <path> --base <base-ref> --head <head-sha> --format json` is the Sprint 1 machine contract for `samorev`.
 - `samotest gate report --manifest <path> --format json` may emit the same JSON shape for reporting, but `samorev` gates consume `gate check` because its exit code is authoritative.
+- `samorev` review notes should include a `## samorev review note: samotest` section with the gate status, manifest link, per-scenario evidence links, gate errors, and the embedded `samotest gate check` JSON in a details block. The exact shape is documented in `docs/samorev-integration.md`.
 - `samorev` can require:
   - at least one evidence bundle per PR/MR;
   - all required scenarios for changed paths;
