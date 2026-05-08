@@ -941,6 +941,7 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
       manifestPath: inspection.manifest_path,
       artifacts: inspection.manifest.artifacts ?? [],
       bodyPath: fallbackPath,
+      resolveArtifactUrl: options.resolveArtifactUrl,
     })
     : await postProviderComment({
       provider: provider.value,
@@ -1174,6 +1175,7 @@ async function postGitLabEvidence(options: {
   manifestPath: string;
   artifacts: Array<{ path: string }>;
   bodyPath: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!options.project) {
     return { ok: false, reason: "GitLab project is required for uploads; local markdown fallback was written." };
@@ -1203,22 +1205,11 @@ async function postGitLabEvidence(options: {
   }
 
   const originalManifest = JSON.parse(await readFile(options.manifestPath, "utf8")) as Record<string, unknown>;
-  const artifacts = Array.isArray(originalManifest.artifacts)
-    ? originalManifest.artifacts.map((artifact) => {
-      if (!isRecord(artifact) || !isNonEmptyString(artifact.path)) {
-        return artifact;
-      }
-      const uploaded = uploadedArtifacts.find((candidate) => candidate.localPath === artifact.path);
-      return uploaded ? { ...artifact, url: absoluteGitLabUrl(baseUrl, uploaded.url) } : artifact;
-    })
-    : originalManifest.artifacts;
+  const artifacts = withHostedArtifactUrls(originalManifest.artifacts, uploadedArtifacts, baseUrl);
   const tempDir = await mkdtemp(join(tmpdir(), "samotest-gitlab-upload-"));
   const manifestUploadPath = join(tempDir, "manifest.json");
-  await writeFile(
-    manifestUploadPath,
-    `${JSON.stringify({ ...originalManifest, artifacts }, null, 2)}\n`,
-    "utf8",
-  );
+  const uploadedManifest = { ...originalManifest, artifacts };
+  await writeFile(manifestUploadPath, `${JSON.stringify(uploadedManifest, null, 2)}\n`, "utf8");
 
   const manifestUpload = await uploadGitLabFile({
     baseUrl,
@@ -1231,13 +1222,30 @@ async function postGitLabEvidence(options: {
     return { ok: false, reason: manifestUpload.reason };
   }
 
-  const body = await readFile(options.bodyPath, "utf8");
+  const hostedManifestUrl = absoluteGitLabUrl(baseUrl, manifestUpload.value.url);
+  const reportManifestPath = join(tempDir, "manifest-for-report.json");
+  await writeFile(
+    reportManifestPath,
+    `${JSON.stringify(withHostedManifestUrl(uploadedManifest, hostedManifestUrl), null, 2)}\n`,
+    "utf8",
+  );
+  const hostedGate = await checkGate({
+    manifestPath: reportManifestPath,
+    resolveArtifactUrl: options.resolveArtifactUrl ?? (async () => true),
+  });
+  const body = bodyWithGitLabUploads(
+    formatGateReportMarkdown(hostedGate.report),
+    uploadedArtifacts,
+    manifestUpload.value,
+    baseUrl,
+  );
+  await writeFile(options.bodyPath, body, "utf8");
   const posted = await postGitLabNote({
     baseUrl,
     token,
     project: options.project,
     target: options.target,
-    body: bodyWithGitLabUploads(body, uploadedArtifacts, manifestUpload.value, baseUrl),
+    body,
   });
 
   if (!posted.ok) {
@@ -1245,6 +1253,35 @@ async function postGitLabEvidence(options: {
   }
 
   return { ok: true };
+}
+
+function withHostedArtifactUrls(
+  artifacts: unknown,
+  uploadedArtifacts: GitLabUploadResult[],
+  baseUrl: string,
+): unknown {
+  if (!Array.isArray(artifacts)) {
+    return artifacts;
+  }
+
+  return artifacts.map((artifact) => {
+    if (!isRecord(artifact) || !isNonEmptyString(artifact.path)) {
+      return artifact;
+    }
+    const uploaded = uploadedArtifacts.find((candidate) => candidate.localPath === artifact.path);
+    return uploaded ? { ...artifact, url: absoluteGitLabUrl(baseUrl, uploaded.url) } : artifact;
+  });
+}
+
+function withHostedManifestUrl(manifest: Record<string, unknown>, manifestUrl: string): Record<string, unknown> {
+  const review = isRecord(manifest.review) ? manifest.review : {};
+  return {
+    ...manifest,
+    review: {
+      ...review,
+      manifest_url: manifestUrl,
+    },
+  };
 }
 
 async function uploadGitLabFile(options: {
