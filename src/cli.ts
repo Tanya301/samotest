@@ -2,6 +2,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { checkGate } from "./gate.js";
+
 export interface CliResult {
   exitCode: number;
   stdout: string;
@@ -10,6 +12,7 @@ export interface CliResult {
 
 export interface RunCliOptions {
   cwd?: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
 }
 
 const sprintCommands = [
@@ -41,6 +44,13 @@ Reviewed Sprint 1 commands:
 ${sprintCommands.map((command) => `  ${command}`).join("\n")}
 `;
 
+interface GateCheckArgs {
+  manifest?: string;
+  base?: string;
+  head?: string;
+  format: "json" | "text";
+}
+
 export async function runCli(args: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
   const [command, subcommand] = args;
@@ -56,6 +66,10 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
   if (command === "init") {
     await initProject(cwd);
     return { exitCode: 0, stdout: "Initialized .samotest\n", stderr: "" };
+  }
+
+  if (command === "gate" && subcommand === "check") {
+    return runGateCheck(args.slice(2), options);
   }
 
   if (isReviewedPlaceholder(command, subcommand)) {
@@ -103,12 +117,81 @@ function isReviewedPlaceholder(command: string, subcommand?: string): boolean {
     command === "doctor" ||
     (command === "scenario" && (subcommand === "list" || subcommand === "validate")) ||
     (command === "evidence" && ["inspect", "package", "upload"].includes(subcommand ?? "")) ||
-    (command === "gate" && ["check", "report"].includes(subcommand ?? ""))
+    (command === "gate" && subcommand === "report")
   );
 }
 
 function formatCommand(command: string, subcommand?: string): string {
   return subcommand ? `${command} ${subcommand}` : command;
+}
+
+async function runGateCheck(args: string[], options: RunCliOptions): Promise<CliResult> {
+  const parsed = parseGateCheckArgs(args);
+
+  if (!parsed.manifest) {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Missing required option --manifest <path>\n",
+    };
+  }
+
+  if (parsed.format !== "json" && parsed.format !== "text") {
+    return {
+      exitCode: 3,
+      stdout: "",
+      stderr: "Invalid --format. Expected json or text.\n",
+    };
+  }
+
+  const result = await checkGate({
+    manifestPath: parsed.manifest,
+    cwd: options.cwd,
+    baseRef: parsed.base,
+    headSha: parsed.head,
+    resolveArtifactUrl: options.resolveArtifactUrl,
+  });
+
+  if (parsed.format === "json") {
+    return {
+      exitCode: result.exitCode,
+      stdout: `${JSON.stringify(result.report, null, 2)}\n`,
+      stderr: "",
+    };
+  }
+
+  return {
+    exitCode: result.exitCode,
+    stdout: `samotest gate ${result.report.gate.status}\n`,
+    stderr: "",
+  };
+}
+
+function parseGateCheckArgs(args: string[]): GateCheckArgs {
+  const parsed: GateCheckArgs = {
+    format: "text",
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const next = args[index + 1];
+
+    if (arg === "--manifest") {
+      parsed.manifest = next;
+      index += 1;
+    } else if (arg === "--base") {
+      parsed.base = next;
+      index += 1;
+    } else if (arg === "--head") {
+      parsed.head = next;
+      index += 1;
+    } else if (arg === "--format") {
+      parsed.format = next as GateCheckArgs["format"];
+      index += 1;
+    }
+  }
+
+  return parsed;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
