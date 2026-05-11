@@ -19,7 +19,7 @@ Manifest: [manifest](https://example.test/evidence/pass/manifest.json)
   "schema_version": "0.1",
   "tool": {
     "name": "samotest",
-    "version": "0.1.0"
+    "version": "0.1.4"
   },
   "gate": {
     "status": "pass",

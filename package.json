@@ -1,6 +1,6 @@
 {
   "name": "samotest",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Manual test scenario runner and evidence gate CLI.",
   "type": "module",
   "main": "./dist/cli.js",
@@ -30,7 +30,7 @@
     "url": "https://github.com/Tanya301/samotest/issues"
   },
   "homepage": "https://github.com/Tanya301/samotest#readme",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "yaml": "^2.7.0"
   },

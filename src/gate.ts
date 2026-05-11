@@ -116,7 +116,7 @@ export interface GateCheckResult {
   report: GateReport;
 }
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.4";
 const VALID_STATUSES = new Set<EvidenceStatus>([
   "passed",
   "failed",

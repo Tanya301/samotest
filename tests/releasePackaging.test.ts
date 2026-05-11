@@ -14,7 +14,8 @@ describe("release packaging", () => {
     const packageJson = await readJson("package.json");
 
     assert.equal(packageJson.name, "samotest");
-    assert.equal(packageJson.version, "0.1.0");
+    assert.equal(packageJson.version, "0.1.4");
+    assert.equal(packageJson.license, "Apache-2.0");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
     assert.equal(packageJson.private, undefined);
     assert.deepEqual(packageJson.files, ["dist/", "docs/", "samples/", "LICENSE", "README.md", "SPEC.md"]);
@@ -33,7 +34,9 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /v0\.1\.0 is released/);
+    assert.match(readme, /v0\.1\.4 is ready for early real use/);
+    assert.doesNotMatch(readme, /0\.1\.0/);
+    assert.doesNotMatch(readme, /scenario validate is not implemented yet/);
     assert.match(readme, /samotest doctor/);
     assert.match(readme, /samotest record my-browser-scenario --format video/);
     assert.match(readme, /record --format gif.*video fallback evidence/);
@@ -65,7 +68,7 @@ describe("release packaging", () => {
 
       const bin = await run(join(installDir, "node_modules/.bin/samotest"), ["--version"], { cwd: installDir });
 
-      assert.equal(bin.stdout, "0.1.0\n");
+      assert.equal(bin.stdout, "0.1.4\n");
       assert.equal(bin.stderr, "");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
