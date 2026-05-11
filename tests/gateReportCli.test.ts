@@ -42,7 +42,15 @@ const manifest: EvidenceManifest = {
     },
   ],
   review: {
+    provider: "github",
+    pr: "25",
     manifest_url: "https://example.test/manifest.json",
+    summary: {
+      provider: "github",
+      target: "pull_request 25",
+      url: "https://example.test/pull/25#issuecomment-1",
+      posted_at: "2026-05-08T19:09:00Z",
+    },
   },
 };
 
@@ -96,8 +104,9 @@ describe("samotest gate report", () => {
 
       assert.equal(result.exitCode, 4);
       assert.match(result.stdout, /## samotest evidence gate: fail/);
-      assert.match(result.stdout, /Review completeness: incomplete - hosted artifact URLs are required before review\./);
+      assert.match(result.stdout, /Review completeness: incomplete - provider-owned evidence posting is required before review\./);
       assert.match(result.stdout, /artifact_url_missing: Artifact artifacts\/gate-contract\.log is missing a URL required for review\./);
+      assert.match(result.stdout, /local_only_evidence: Artifact artifacts\/gate-contract\.log is local-only/);
       assert.equal(result.stderr, "");
     } finally {
       await rm(cwd, { recursive: true, force: true });

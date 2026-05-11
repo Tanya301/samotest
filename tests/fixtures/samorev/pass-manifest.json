@@ -28,6 +28,14 @@
     }
   ],
   "review": {
-    "manifest_url": "https://example.test/evidence/pass/manifest.json"
+    "provider": "github",
+    "pr": "25",
+    "manifest_url": "https://example.test/evidence/pass/manifest.json",
+    "summary": {
+      "provider": "github",
+      "target": "pull_request 25",
+      "url": "https://example.test/pull/25#issuecomment-1",
+      "posted_at": "2026-05-08T19:09:00Z"
+    }
   }
 }

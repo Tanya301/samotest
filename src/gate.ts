@@ -42,6 +42,13 @@ export interface EvidenceManifest {
   review?: {
     manifest_url?: string;
     waiver?: GateWaiver;
+    summary?: {
+      provider?: string;
+      target?: string;
+      url?: string;
+      posted_at?: string;
+      [key: string]: unknown;
+    };
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -172,6 +179,7 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
   const errors: GateError[] = [];
   const staleReasons = staleEvidenceReasons(manifest, options);
   const artifactErrors = await artifactUrlErrors(manifest, required, options.resolveArtifactUrl ?? resolveArtifactUrl);
+  const ownershipErrors = evidenceOwnershipErrors(manifest, required);
   const fresh = staleReasons.length === 0;
   let scenarioStatus: ScenarioGateStatus;
   let reason = "Evidence passed and matches the requested refs.";
@@ -185,6 +193,7 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
   }
 
   errors.push(...artifactErrors);
+  errors.push(...ownershipErrors);
 
   if (!fresh) {
     scenarioStatus = "fail";
@@ -200,6 +209,9 @@ export async function checkGate(options: GateCheckOptions): Promise<GateCheckRes
       message: reason,
       scenario_id: manifest.run.scenario_id,
     });
+  } else if (manifest.run.status === "passed" && ownershipErrors.length > 0) {
+    scenarioStatus = required ? "fail" : "warn";
+    reason = ownershipErrors[0]?.message ?? "Provider-owned evidence summary is required before review.";
   } else if (manifest.run.status === "passed") {
     scenarioStatus = "pass";
   } else if (manifest.run.status === "waived") {
@@ -285,11 +297,12 @@ export function formatGateReportMarkdown(report: GateReport): string {
     `Target: ${report.evidence.target ?? "unknown"}`,
     `Command: ${report.evidence.command ?? "unknown"}`,
     `Summary: ${report.gate.summary.passed} passed, ${report.gate.summary.failed} failed, ${report.gate.summary.warned} warned, ${report.gate.summary.waived} waived`,
-    `Review completeness: ${reportHasLocalOnlyArtifacts(report) ? "incomplete - hosted artifact URLs are required before review." : "complete"}`,
+    `Review completeness: ${reportHasReviewGaps(report) ? "incomplete - provider-owned evidence posting is required before review." : "complete"}`,
   ];
 
   if (isNonEmptyString(report.gate.manifest_url)) {
     lines.push(`Manifest: [manifest](${report.gate.manifest_url})`);
+    lines.push(`samotest-manifest-url: ${report.gate.manifest_url}`);
   } else {
     lines.push(`Manifest: ${report.gate.manifest_path}`);
   }
@@ -385,6 +398,11 @@ async function artifactUrlErrors(
         message: `Artifact ${artifact.path} is missing a URL required for review.`,
         scenario_id: manifest.run.scenario_id,
       });
+      errors.push({
+        code: "local_only_evidence",
+        message: `Artifact ${artifact.path} is local-only; run samotest evidence upload for the target provider before review.`,
+        scenario_id: manifest.run.scenario_id,
+      });
       continue;
     }
 
@@ -395,6 +413,40 @@ async function artifactUrlErrors(
         scenario_id: manifest.run.scenario_id,
       });
     }
+  }
+
+  return errors;
+}
+
+function evidenceOwnershipErrors(manifest: EvidenceManifest, required: boolean): GateError[] {
+  if (!required) {
+    return [];
+  }
+
+  const errors: GateError[] = [];
+  const review = manifest.review;
+  const summary = review?.summary;
+
+  if (!isNonEmptyString(review?.manifest_url)) {
+    errors.push({
+      code: "manifest_url_missing",
+      message: "Evidence manifest is missing a provider-hosted manifest_url required for review.",
+      scenario_id: manifest.run.scenario_id,
+    });
+  }
+
+  if (!isRecord(summary) || !isNonEmptyString(summary.provider) || !isNonEmptyString(summary.target) || !isNonEmptyString(summary.posted_at)) {
+    errors.push({
+      code: "evidence_summary_missing",
+      message: "Evidence links are not enough; samotest must post a provider-owned evidence summary before review.",
+      scenario_id: manifest.run.scenario_id,
+    });
+  } else if (!isNonEmptyString(summary.url)) {
+    errors.push({
+      code: "evidence_summary_url_missing",
+      message: "Evidence summary is missing the provider comment or note URL required for review.",
+      scenario_id: manifest.run.scenario_id,
+    });
   }
 
   return errors;
@@ -601,8 +653,10 @@ function formatArtifactLink(artifact: EvidenceArtifact): string {
   return escapeTableCell(artifact.path);
 }
 
-function reportHasLocalOnlyArtifacts(report: GateReport): boolean {
-  return report.errors.some((error) => error.code === "artifact_url_missing");
+function reportHasReviewGaps(report: GateReport): boolean {
+  return report.errors.some((error) =>
+    ["artifact_url_missing", "local_only_evidence", "manifest_url_missing", "evidence_summary_missing", "evidence_summary_url_missing"].includes(error.code)
+  );
 }
 
 function formatManifestReference(report: GateReport): string {

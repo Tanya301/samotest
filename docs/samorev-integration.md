@@ -20,7 +20,8 @@ Contract:
 - `gate.status` is one of `pass`, `fail`, `warn`, or `waived`.
 - `gate.manifest_url` is copied from `manifest.review.manifest_url` when available.
 - `scenarios[].artifacts[].url` is required for every required scenario artifact in PR/MR review. Missing or unreachable URLs fail the gate.
-- `errors[]` contains stable machine codes such as `stale_evidence`, `evidence_status_failed`, `artifact_url_missing`, and `artifact_url_unresolved`.
+- `manifest.review.manifest_url` and `manifest.review.summary.url` are required for passing PR/MR gates. Link-only evidence, including locally forged summary metadata without a provider comment/note URL, fails until `samotest evidence upload` posts and records the provider-owned summary comment/note.
+- `errors[]` contains stable machine codes such as `stale_evidence`, `evidence_status_failed`, `artifact_url_missing`, `local_only_evidence`, `manifest_url_missing`, `evidence_summary_missing`, and `artifact_url_unresolved`.
 
 Exit codes:
 
