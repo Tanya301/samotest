@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "pass",
+    "checked_at": "2026-05-11T17:05:09.562Z",
+    "base_ref": "main",
+    "head_ref": "main",
+    "head_sha": "a39fea1",
+    "manifest_path": "/root/tmp/samotest-issue36-evidence-branch/evidence/issue36-video/hosted-manifest.json",
+    "manifest_url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue36-screenshot-evidence/evidence/issue36-video/hosted-manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 1,
+      "failed": 0,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-video",
+    "scenario_id": "llm-video-smoke",
+    "command": "samotest record llm-video-smoke --format video --run-id issue36-llm-video --output .samotest/evidence",
+    "provider": "github",
+    "target": "issue 36"
+  },
+  "scenarios": [
+    {
+      "id": "llm-video-smoke",
+      "required": true,
+      "status": "pass",
+      "fresh": true,
+      "reason": "Evidence passed and matches the requested refs.",
+      "artifacts": [
+        {
+          "type": "video",
+          "name": "llm-video-smoke-video",
+          "path": "artifacts/video.webm",
+          "sha256": "6cfa4179daaa6350a954a5bff4b5703cbb44cbfc743e68d29e09ee85d8569efb",
+          "url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue36-screenshot-evidence/evidence/issue36-video/video.webm"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": []
+}
