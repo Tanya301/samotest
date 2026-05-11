@@ -154,6 +154,13 @@ interface GitLabUploadResult {
   url: string;
 }
 
+interface ProviderEvidenceSummary {
+  provider: UploadProvider;
+  target: string;
+  url?: string;
+  posted_at: string;
+}
+
 interface RunCommandArgs {
   scenarioId?: string;
   output: string;
@@ -1041,19 +1048,22 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
       artifacts: inspection.manifest.artifacts ?? [],
       bodyPath: fallbackPath,
       resolveArtifactUrl: options.resolveArtifactUrl,
+      now: options.now,
     })
-    : await postProviderComment({
-      provider: provider.value,
-      target: target.id,
-      repo: project,
+    : await postGitHubEvidence({
+      target,
+      project,
+      manifestPath: inspection.manifest_path,
       bodyPath: fallbackPath,
+      resolveArtifactUrl: options.resolveArtifactUrl,
+      now: options.now,
     });
 
   if (!posted.ok) {
     return {
-      exitCode: 0,
-      stdout: `Prepared ${provider.value} comment markdown at ${fallbackPath}\n${posted.reason}\n`,
-      stderr: "",
+      exitCode: 4,
+      stdout: "",
+      stderr: `${posted.reason}\n`,
     };
   }
 
@@ -1235,37 +1245,130 @@ function formatGitLabCommentAction(target: UploadTarget | null): string {
   return `POST /projects/:id/merge_requests/${target.id}/notes`;
 }
 
-async function postProviderComment(options: {
-  provider: UploadProvider;
-  target: string;
-  repo?: string;
+async function postGitHubEvidence(options: {
+  target: UploadTarget;
+  project?: string;
+  manifestPath: string;
   bodyPath: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
+  now?: () => Date;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (options.provider === "github") {
-    const auth = await commandSucceeds("gh", ["auth", "status"]);
-    if (!auth) {
-      return { ok: false, reason: "gh is not authenticated; local markdown fallback was written." };
-    }
-
-    const args = ["pr", "comment", options.target, "--body-file", options.bodyPath];
-    if (options.repo) {
-      args.push("--repo", options.repo);
-    }
-
-    return postCommand("gh", args);
+  if (!options.project) {
+    return { ok: false, reason: "GitHub repository is required for evidence posting." };
   }
 
-  const auth = await commandSucceeds("glab", ["auth", "status"]);
+  const originalManifest = JSON.parse(await readFile(options.manifestPath, "utf8")) as Record<string, unknown>;
+  const missingHostedArtifacts = missingArtifactUrls(originalManifest.artifacts);
+  if (missingHostedArtifacts.length > 0) {
+    return {
+      ok: false,
+      reason: `GitHub evidence posting requires hosted artifact URLs before commenting: ${missingHostedArtifacts.join(", ")}`,
+    };
+  }
+
+  const review = isRecord(originalManifest.review) ? originalManifest.review : undefined;
+  const manifestUrl = stringRecordValue(review, "manifest_url");
+  if (!manifestUrl) {
+    return { ok: false, reason: "GitHub evidence posting requires review.manifest_url before commenting." };
+  }
+
+  const postedAt = (options.now ? options.now() : new Date()).toISOString();
+  const pendingSummary: ProviderEvidenceSummary = {
+    provider: "github",
+    target: `${options.target.kind} ${options.target.id}`,
+    posted_at: postedAt,
+  };
+  const reportManifest = await writeTemporaryManifest(withProviderSummary(originalManifest, pendingSummary));
+  const hostedGate = await checkGate({
+    manifestPath: reportManifest,
+    resolveArtifactUrl: options.resolveArtifactUrl ?? (async () => true),
+  });
+  await writeFile(options.bodyPath, formatGateReportMarkdown(hostedGate.report), "utf8");
+
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    const posted = await postGitHubIssueComment({
+      token,
+      repo: options.project,
+      issue: options.target.id,
+      body: await readFile(options.bodyPath, "utf8"),
+    });
+    if (!posted.ok) {
+      return { ok: false, reason: posted.reason };
+    }
+    if (!posted.url || posted.id === undefined) {
+      return { ok: false, reason: "GitHub evidence comment response did not include a provider comment URL." };
+    }
+
+    const summary = {
+      ...pendingSummary,
+      url: posted.url,
+    };
+    const finalBody = await renderProviderOwnedGateBody({
+      manifest: withProviderSummary(originalManifest, summary),
+      bodyPath: options.bodyPath,
+      resolveArtifactUrl: options.resolveArtifactUrl,
+    });
+    const updated = await updateGitHubIssueComment({
+      token,
+      repo: options.project,
+      commentId: posted.id,
+      body: finalBody,
+    });
+    if (!updated.ok) {
+      return { ok: false, reason: updated.reason };
+    }
+    await updateManifestForProviderPost(options.manifestPath, {
+      summary,
+    });
+    return { ok: true };
+  }
+
+  const auth = await commandSucceeds("gh", ["auth", "status"]);
   if (!auth) {
-    return { ok: false, reason: "glab is not authenticated; local markdown fallback was written." };
+    return { ok: false, reason: "GitHub evidence posting requires GITHUB_TOKEN or authenticated gh CLI." };
   }
 
-  const args = ["mr", "note", options.target, "--message", await readFile(options.bodyPath, "utf8")];
-  if (options.repo) {
-    args.push("--repo", options.repo);
+  const ghToken = await githubTokenFromGh();
+  if (!ghToken.ok) {
+    return { ok: false, reason: ghToken.reason };
   }
 
-  return postCommand("glab", args);
+  const posted = await postGitHubIssueComment({
+    token: ghToken.token,
+    repo: options.project,
+    issue: options.target.id,
+    body: await readFile(options.bodyPath, "utf8"),
+  });
+  if (!posted.ok) {
+    return posted;
+  }
+  if (!posted.url || posted.id === undefined) {
+    return { ok: false, reason: "GitHub evidence comment response did not include a provider comment URL." };
+  }
+
+  const summary = {
+    ...pendingSummary,
+    url: posted.url,
+  };
+  const finalBody = await renderProviderOwnedGateBody({
+    manifest: withProviderSummary(originalManifest, summary),
+    bodyPath: options.bodyPath,
+    resolveArtifactUrl: options.resolveArtifactUrl,
+  });
+  const updated = await updateGitHubIssueComment({
+    token: ghToken.token,
+    repo: options.project,
+    commentId: posted.id,
+    body: finalBody,
+  });
+  if (!updated.ok) {
+    return { ok: false, reason: updated.reason };
+  }
+  await updateManifestForProviderPost(options.manifestPath, {
+    summary,
+  });
+  return { ok: true };
 }
 
 async function postGitLabEvidence(options: {
@@ -1275,14 +1378,15 @@ async function postGitLabEvidence(options: {
   artifacts: Array<{ path: string }>;
   bodyPath: string;
   resolveArtifactUrl?: (url: string) => Promise<boolean>;
+  now?: () => Date;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!options.project) {
-    return { ok: false, reason: "GitLab project is required for uploads; local markdown fallback was written." };
+    return { ok: false, reason: "GitLab project is required for evidence uploads." };
   }
 
   const token = process.env.GITLAB_TOKEN ?? process.env.GLAB_TOKEN;
   if (!token) {
-    return { ok: false, reason: "GITLAB_TOKEN or GLAB_TOKEN is required for GitLab uploads; local markdown fallback was written." };
+    return { ok: false, reason: "GITLAB_TOKEN or GLAB_TOKEN is required for GitLab evidence uploads." };
   }
 
   const baseUrl = (process.env.GITLAB_URL ?? "https://gitlab.com").replace(/\/$/, "");
@@ -1322,10 +1426,16 @@ async function postGitLabEvidence(options: {
   }
 
   const hostedManifestUrl = absoluteGitLabUrl(baseUrl, manifestUpload.value.url);
+  const postedAt = (options.now ? options.now() : new Date()).toISOString();
+  const pendingSummary: ProviderEvidenceSummary = {
+    provider: "gitlab",
+    target: `${options.target.kind} ${options.target.id}`,
+    posted_at: postedAt,
+  };
   const reportManifestPath = join(tempDir, "manifest-for-report.json");
   await writeFile(
     reportManifestPath,
-    `${JSON.stringify(withHostedManifestUrl(uploadedManifest, hostedManifestUrl), null, 2)}\n`,
+    `${JSON.stringify(withProviderSummary(withHostedManifestUrl(uploadedManifest, hostedManifestUrl), pendingSummary), null, 2)}\n`,
     "utf8",
   );
   const hostedGate = await checkGate({
@@ -1350,6 +1460,44 @@ async function postGitLabEvidence(options: {
   if (!posted.ok) {
     return { ok: false, reason: posted.reason };
   }
+  if (!posted.url || posted.id === undefined) {
+    return { ok: false, reason: "GitLab evidence note response did not include a provider note URL." };
+  }
+
+  const summary = {
+    ...pendingSummary,
+    url: posted.url,
+  };
+  const finalManifest = withProviderSummary(withHostedManifestUrl(uploadedManifest, hostedManifestUrl), summary);
+  const finalReportManifestPath = join(tempDir, "manifest-final-report.json");
+  await writeFile(finalReportManifestPath, `${JSON.stringify(finalManifest, null, 2)}\n`, "utf8");
+  const finalGate = await checkGate({
+    manifestPath: finalReportManifestPath,
+    resolveArtifactUrl: options.resolveArtifactUrl ?? (async () => true),
+  });
+  const finalBody = bodyWithGitLabUploads(
+    formatGateReportMarkdown(finalGate.report),
+    uploadedArtifacts,
+    manifestUpload.value,
+    baseUrl,
+  );
+  await writeFile(options.bodyPath, finalBody, "utf8");
+  const updated = await updateGitLabNote({
+    baseUrl,
+    token,
+    project: options.project,
+    target: options.target,
+    noteId: posted.id,
+    body: finalBody,
+  });
+  if (!updated.ok) {
+    return { ok: false, reason: updated.reason };
+  }
+  await writeFile(
+    options.manifestPath,
+    `${JSON.stringify(finalManifest, null, 2)}\n`,
+    "utf8",
+  );
 
   return { ok: true };
 }
@@ -1381,6 +1529,133 @@ function withHostedManifestUrl(manifest: Record<string, unknown>, manifestUrl: s
       manifest_url: manifestUrl,
     },
   };
+}
+
+function withProviderSummary(manifest: Record<string, unknown>, summary: ProviderEvidenceSummary): Record<string, unknown> {
+  const review = isRecord(manifest.review) ? manifest.review : {};
+  return {
+    ...manifest,
+    review: {
+      ...review,
+      provider: summary.provider,
+      summary,
+    },
+  };
+}
+
+async function writeTemporaryManifest(manifest: Record<string, unknown>): Promise<string> {
+  const tempDir = await mkdtemp(join(tmpdir(), "samotest-provider-manifest-"));
+  const path = join(tempDir, "manifest.json");
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return path;
+}
+
+async function renderProviderOwnedGateBody(options: {
+  manifest: Record<string, unknown>;
+  bodyPath: string;
+  resolveArtifactUrl?: (url: string) => Promise<boolean>;
+}): Promise<string> {
+  const reportManifest = await writeTemporaryManifest(options.manifest);
+  const gate = await checkGate({
+    manifestPath: reportManifest,
+    resolveArtifactUrl: options.resolveArtifactUrl ?? (async () => true),
+  });
+  const body = formatGateReportMarkdown(gate.report);
+  await writeFile(options.bodyPath, body, "utf8");
+  return body;
+}
+
+async function updateManifestForProviderPost(
+  manifestPath: string,
+  options: { summary: ProviderEvidenceSummary },
+): Promise<void> {
+  const originalManifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  await writeFile(manifestPath, `${JSON.stringify(withProviderSummary(originalManifest, options.summary), null, 2)}\n`, "utf8");
+}
+
+function missingArtifactUrls(artifacts: unknown): string[] {
+  if (!Array.isArray(artifacts)) {
+    return [];
+  }
+
+  return artifacts
+    .filter((artifact) => isRecord(artifact) && isNonEmptyString(artifact.path) && !isNonEmptyString(artifact.url))
+    .map((artifact) => (artifact as { path: string }).path);
+}
+
+async function postGitHubIssueComment(options: {
+  token: string;
+  repo: string;
+  issue: string;
+  body: string;
+}): Promise<{ ok: true; id?: number; url?: string } | { ok: false; reason: string }> {
+  const response = await fetch(`https://api.github.com/repos/${options.repo}/issues/${encodeURIComponent(options.issue)}/comments`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${options.token}`,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({ body: options.body }),
+  }).catch((error: Error) => error);
+
+  if (response instanceof Error) {
+    return { ok: false, reason: `GitHub evidence comment failed: ${response.message}` };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `GitHub evidence comment failed: HTTP ${response.status} ${await response.text()}` };
+  }
+
+  const parsed = await response.json() as { id?: unknown; html_url?: unknown };
+  return {
+    ok: true,
+    id: typeof parsed.id === "number" ? parsed.id : undefined,
+    url: stringValue(parsed.html_url) ?? undefined,
+  };
+}
+
+async function updateGitHubIssueComment(options: {
+  token: string;
+  repo: string;
+  commentId: number;
+  body: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const response = await fetch(`https://api.github.com/repos/${options.repo}/issues/comments/${options.commentId}`, {
+    method: "PATCH",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${options.token}`,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({ body: options.body }),
+  }).catch((error: Error) => error);
+
+  if (response instanceof Error) {
+    return { ok: false, reason: `GitHub evidence comment update failed: ${response.message}` };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `GitHub evidence comment update failed: HTTP ${response.status} ${await response.text()}` };
+  }
+
+  return { ok: true };
+}
+
+async function githubTokenFromGh(): Promise<{ ok: true; token: string } | { ok: false; reason: string }> {
+  try {
+    const { stdout } = await execFileAsync("gh", ["auth", "token"]);
+    const token = stdout.trim();
+    if (!token) {
+      return { ok: false, reason: "GitHub evidence posting could not read a token from authenticated gh CLI." };
+    }
+
+    return { ok: true, token };
+  } catch (error) {
+    return { ok: false, reason: `GitHub evidence posting could not read a token from gh CLI: ${formatError(error)}` };
+  }
 }
 
 async function uploadGitLabFile(options: {
@@ -1430,7 +1705,7 @@ async function postGitLabNote(options: {
   project: string;
   target: UploadTarget;
   body: string;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<{ ok: true; id?: string; url?: string } | { ok: false; reason: string }> {
   const endpoint = options.target.kind === "issue"
     ? `issues/${encodeURIComponent(options.target.id)}/notes`
     : `merge_requests/${encodeURIComponent(options.target.id)}/notes`;
@@ -1451,7 +1726,56 @@ async function postGitLabNote(options: {
     return { ok: false, reason: `GitLab comment command failed; local markdown fallback was written. HTTP ${response.status} ${await response.text()}` };
   }
 
+  const parsed = await response.json().catch(() => ({})) as { id?: unknown; web_url?: unknown };
+  const id = typeof parsed.id === "number" || isNonEmptyString(parsed.id) ? String(parsed.id) : undefined;
+  return {
+    ok: true,
+    id,
+    url: stringValue(parsed.web_url) ?? gitLabNoteUrl(options.baseUrl, options.project, options.target, id),
+  };
+}
+
+async function updateGitLabNote(options: {
+  baseUrl: string;
+  token: string;
+  project: string;
+  target: UploadTarget;
+  noteId: string;
+  body: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const endpoint = options.target.kind === "issue"
+    ? `issues/${encodeURIComponent(options.target.id)}/notes/${encodeURIComponent(options.noteId)}`
+    : `merge_requests/${encodeURIComponent(options.target.id)}/notes/${encodeURIComponent(options.noteId)}`;
+  const response = await fetch(`${options.baseUrl}/api/v4/projects/${encodeURIComponent(options.project)}/${endpoint}`, {
+    method: "PUT",
+    headers: {
+      ...gitLabAuthHeaders(options.token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ body: options.body }),
+  }).catch((error: Error) => error);
+
+  if (response instanceof Error) {
+    return { ok: false, reason: `GitLab comment update failed: ${response.message}` };
+  }
+
+  if (!response.ok) {
+    return { ok: false, reason: `GitLab comment update failed: HTTP ${response.status} ${await response.text()}` };
+  }
+
   return { ok: true };
+}
+
+function gitLabNoteUrl(baseUrl: string, project: string, target: UploadTarget, noteId: unknown): string | undefined {
+  if (!isNonEmptyString(noteId) && typeof noteId !== "number") {
+    return undefined;
+  }
+
+  const id = String(noteId);
+  const targetPath = target.kind === "issue"
+    ? `issues/${target.id}`
+    : `merge_requests/${target.id}`;
+  return `${baseUrl}/${project}/-/${targetPath}#note_${id}`;
 }
 
 function bodyWithGitLabUploads(
