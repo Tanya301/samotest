@@ -1,0 +1,16 @@
+id: llm-video-smoke
+title: LLM browser video evidence smoke
+owner: "@qa"
+priority: required
+target:
+  type: browser
+  url: "http://127.0.0.1:41740/"
+steps:
+  - id: record-localhost-page
+    instruction: "Open the localhost smoke page and record browser video."
+    url: "http://127.0.0.1:41740/"
+    expected: "The video shows the samotest #36 video evidence headline."
+result:
+  required_observations:
+    - "Video artifact is a WebM file."
+    - "The browser page renders under localhost."

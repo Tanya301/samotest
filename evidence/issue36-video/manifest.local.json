@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "run": {
+    "id": "issue36-llm-video",
+    "scenario_id": "llm-video-smoke",
+    "status": "passed",
+    "started_at": "2026-05-11T17:04:30.043Z",
+    "finished_at": "2026-05-11T17:04:30.739Z",
+    "required": true
+  },
+  "source": {
+    "commit": "unknown"
+  },
+  "environment": {
+    "os": "linux",
+    "browser": "chromium",
+    "redacted": true
+  },
+  "artifacts": [
+    {
+      "type": "video",
+      "name": "llm-video-smoke-video",
+      "path": "artifacts/video.webm",
+      "sha256": "6cfa4179daaa6350a954a5bff4b5703cbb44cbfc743e68d29e09ee85d8569efb"
+    }
+  ],
+  "observations": [
+    {
+      "step_id": "record-localhost-page",
+      "status": "passed",
+      "note": "Captured browser video for http://127.0.0.1:41740/."
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+# samotest issue #36 browser video dogfood
+# date: 2026-05-11T17:04:22Z
+# commit: a39fea111d8131f1f423101a8d680fd4abfdb22f
++ cd /root/tmp/samotest-issue36-v014b
++ npm run build
+
+> samotest@0.1.4 build
+> tsc -p tsconfig.build.json
+
++ npm pack --pack-destination /root/tmp/samotest-issue36-video
+
+> samotest@0.1.4 prepack
+> npm run build
+
+
+> samotest@0.1.4 build
+> tsc -p tsconfig.build.json
+
+npm notice
+npm notice 📦  samotest@0.1.4
+npm notice Tarball Contents
+npm notice 11.4kB LICENSE
+npm notice 3.8kB README.md
+npm notice 27.6kB SPEC.md
+npm notice 55.6kB dist/cli.js
+npm notice 13.9kB dist/evidence.js
+npm notice 15.6kB dist/gate.js
+npm notice 2.4kB dist/scenarioValidation.js
+npm notice 3.2kB docs/samorev-integration.md
+npm notice 2.0kB docs/sprint-1-evidence-attachments.md
+npm notice 988B package.json
+npm notice 401B samples/evidence/sprint1-cli-smoke/artifacts/cli-help-output.log
+npm notice 1.5kB samples/evidence/sprint1-cli-smoke/manifest.json
+npm notice 401B samples/fixtures/sprint1-cli-help-output.log
+npm notice 1.6kB samples/samorev/review-note.md
+npm notice Tarball Details
+npm notice name: samotest
+npm notice version: 0.1.4
+npm notice filename: samotest-0.1.4.tgz
+npm notice package size: 33.8 kB
+npm notice unpacked size: 140.4 kB
+npm notice shasum: 438168e2ad24a1663102139f6b62ef555810b52b
+npm notice integrity: sha512-NW0RYpSZLjeFs[...]psbN1HSJnDy8w==
+npm notice total files: 14
+npm notice
+samotest-0.1.4.tgz
++ cd /root/tmp/samotest-issue36-video/install
++ npm init -y
+Wrote to /root/tmp/samotest-issue36-video/install/package.json:
+
+{
+  "name": "install",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
+
+
+
++ npm install /root/tmp/samotest-issue36-video/samotest-0.1.4.tgz
+
+added 2 packages, and audited 3 packages in 525ms
+
+1 package is looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
++ npm install playwright
+
+added 2 packages, and audited 5 packages in 1s
+
+1 package is looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
++ BIN=/root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest --version
+0.1.4
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest doctor
+Recorder availability
+screenshot available Playwright - Chromium browser can launch for screenshots.
+video      available Playwright - Chromium browser can launch for video.
+gif        available ffmpeg - ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+cast       available asciinema - asciinema 2.4.0
++ cd /root/tmp/samotest-issue36-video/work
++ cat
++ SERVER_PID=1363124
++ trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
++ sleep 1
++ python3 -m http.server 41740 --directory site
++ curl -fsS http://127.0.0.1:41740/
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest init
+Initialized .samotest
++ mkdir -p .samotest/scenarios
++ cat
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest scenario validate .samotest/scenarios/llm-video-smoke.yaml
+Valid scenario: llm-video-smoke (.samotest/scenarios/llm-video-smoke.yaml)
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest record llm-video-smoke --format video --run-id issue36-llm-video --output .samotest/evidence
+Recorded video evidence issue36-llm-video at .samotest/evidence/issue36-llm-video/manifest.json
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest evidence inspect .samotest/evidence/issue36-llm-video
++ tee /root/tmp/samotest-issue36-video/evidence-inspect.txt
+Evidence run issue36-llm-video
+Scenario: llm-video-smoke
+Status: passed
+Source: unknown
+Artifacts: 1
+  - video llm-video-smoke-video artifacts/video.webm sha256:6cfa4179daaa6350a954a5bff4b5703cbb44cbfc743e68d29e09ee85d8569efb
+Observations: 1
+  - record-localhost-page passed Captured browser video for http://127.0.0.1:41740/.
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest gate check --manifest .samotest/evidence/issue36-llm-video/manifest.json --format json
++ true
++ cat /root/tmp/samotest-issue36-video/local-gate-check.json
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-11T17:04:30.897Z",
+    "head_sha": "unknown",
+    "manifest_path": "/root/tmp/samotest-issue36-video/work/.samotest/evidence/issue36-llm-video/manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-video",
+    "scenario_id": "llm-video-smoke"
+  },
+  "scenarios": [
+    {
+      "id": "llm-video-smoke",
+      "required": true,
+      "status": "fail",
+      "fresh": true,
+      "reason": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "artifacts": [
+        {
+          "type": "video",
+          "name": "llm-video-smoke-video",
+          "path": "artifacts/video.webm",
+          "sha256": "6cfa4179daaa6350a954a5bff4b5703cbb44cbfc743e68d29e09ee85d8569efb"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "artifact_url_missing",
+      "message": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "scenario_id": "llm-video-smoke"
+    }
+  ]
+}
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest evidence package .samotest/evidence/issue36-llm-video --format zip
++ tee /root/tmp/samotest-issue36-video/package-output.txt
+Created evidence package /root/tmp/samotest-issue36-video/work/.samotest/evidence/issue36-llm-video/issue36-llm-video-evidence.zip
+Entries: 2
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest evidence upload .samotest/evidence/issue36-llm-video --provider gitlab --repo NikolayS/samo.team --issue 255 --dry-run --output /root/tmp/samotest-issue36-video/gitlab-dry-run-comment.md
++ /root/tmp/samotest-issue36-video/install/node_modules/.bin/samotest evidence upload .samotest/evidence/issue36-llm-video --provider github --repo Tanya301/samotest --pr 34 --dry-run --output /root/tmp/samotest-issue36-video/github-dry-run-comment.md
++ file .samotest/evidence/issue36-llm-video/artifacts/video.webm
+.samotest/evidence/issue36-llm-video/artifacts/video.webm: WebM
++ find .samotest/evidence/issue36-llm-video -maxdepth 3 -type f
++ sort
+.samotest/evidence/issue36-llm-video/artifacts/video.webm
+.samotest/evidence/issue36-llm-video/issue36-llm-video-evidence.zip
+.samotest/evidence/issue36-llm-video/manifest.json

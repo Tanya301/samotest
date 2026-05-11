@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-11T17:04:30.897Z",
+    "head_sha": "unknown",
+    "manifest_path": "/root/tmp/samotest-issue36-video/work/.samotest/evidence/issue36-llm-video/manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-video",
+    "scenario_id": "llm-video-smoke"
+  },
+  "scenarios": [
+    {
+      "id": "llm-video-smoke",
+      "required": true,
+      "status": "fail",
+      "fresh": true,
+      "reason": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "artifacts": [
+        {
+          "type": "video",
+          "name": "llm-video-smoke-video",
+          "path": "artifacts/video.webm",
+          "sha256": "6cfa4179daaa6350a954a5bff4b5703cbb44cbfc743e68d29e09ee85d8569efb"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "artifact_url_missing",
+      "message": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "scenario_id": "llm-video-smoke"
+    }
+  ]
+}
