@@ -98,7 +98,7 @@ export interface EvidencePackageResult {
   entries: string[];
 }
 
-const VERSION = "0.1.4";
+const VERSION = "0.1.5";
 const VALID_STATUSES = new Set<EvidenceStatus>(["passed", "failed", "blocked", "skipped", "waived"]);
 
 export async function writeEvidenceManifest(input: EvidenceManifestInput): Promise<EvidenceManifest> {

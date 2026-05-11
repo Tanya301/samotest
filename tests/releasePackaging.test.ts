@@ -14,7 +14,7 @@ describe("release packaging", () => {
     const packageJson = await readJson("package.json");
 
     assert.equal(packageJson.name, "samotest");
-    assert.equal(packageJson.version, "0.1.4");
+    assert.equal(packageJson.version, "0.1.5");
     assert.equal(packageJson.license, "Apache-2.0");
     assert.equal(packageJson.packageManager, "bun@1.3.13");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
@@ -39,7 +39,7 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /v0\.1\.4 is ready for early real use/);
+    assert.match(readme, /v0\.1\.5 is ready for early real use/);
     assert.doesNotMatch(readme, /0\.1\.0/);
     assert.doesNotMatch(readme, /scenario validate is not implemented yet/);
     assert.match(readme, /samotest doctor/);
@@ -82,9 +82,9 @@ describe("release packaging", () => {
         },
       });
 
-      assert.equal(bin.stdout, "0.1.4\n");
+      assert.equal(bin.stdout, "0.1.5\n");
       assert.equal(bin.stderr, "");
-      assert.equal(bunOnlyBin.stdout, "0.1.4\n");
+      assert.equal(bunOnlyBin.stdout, "0.1.5\n");
       assert.equal(bunOnlyBin.stderr, "");
     } finally {
       await rm(tempDir, { recursive: true, force: true });

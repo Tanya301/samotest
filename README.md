@@ -6,7 +6,7 @@ The packaged `samotest` bin is executed with Bun. Use Bun 1.3.13 or newer for lo
 
 ## Release Status
 
-`samotest` v0.1.4 is ready for early real use through a local checkout, a local tarball from `bun pm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
+`samotest` v0.1.5 is ready for early real use through a local checkout, a local tarball from `bun pm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
 
 ## Install For Local Dogfooding
 
@@ -25,7 +25,7 @@ To test the installable package path without publishing:
 bun install
 bun pm pack --dry-run
 bun pm pack
-bun add -g ./samotest-0.1.4.tgz
+bun add -g ./samotest-0.1.5.tgz
 samotest --version
 ```
 
