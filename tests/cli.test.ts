@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { runCli } from "../src/cli.js";
 
 describe("samotest CLI", () => {
@@ -232,9 +232,7 @@ async function runCliProcess(
   options: { cwd: string; stdin: string },
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const repoRoot = join(import.meta.dirname, "..");
-  const child = spawn(process.execPath, [
-    "--import",
-    join(repoRoot, "node_modules/tsx/dist/loader.mjs"),
+  const child = spawn("bun", [
     join(repoRoot, "src/cli.ts"),
     ...args,
   ], {

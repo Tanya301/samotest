@@ -2,28 +2,30 @@
 
 Manual test scenario runner and evidence gate CLI for reviewer-visible dogfooding.
 
+The packaged `samotest` bin is executed with Bun. Use Bun 1.3.13 or newer for local dogfooding, tarball installs, and PR checks.
+
 ## Release Status
 
-`samotest` v0.1.4 is ready for early real use through a local checkout, a local tarball from `npm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
+`samotest` v0.1.4 is ready for early real use through a local checkout, a local tarball from `bun pm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
 
 ## Install For Local Dogfooding
 
 From this repository:
 
 ```sh
-npm ci
-npm run build
-npm link
+bun install
+bun run build
+bun link
 samotest --help
 ```
 
 To test the installable package path without publishing:
 
 ```sh
-npm ci
-npm pack --dry-run
-npm pack
-npm install -g ./samotest-0.1.4.tgz
+bun install
+bun pm pack --dry-run
+bun pm pack
+bun add -g ./samotest-0.1.4.tgz
 samotest --version
 ```
 
@@ -101,10 +103,10 @@ Evidence package, provider upload/comment dry-run, markdown report, and `samorev
 Pull requests run:
 
 ```sh
-npm ci
-npm test
-npm run typecheck
-npm run build
+bun install --frozen-lockfile
+bun test
+bun run typecheck
+bun run build
 ```
 
 Run the same commands locally before opening or updating a PR.

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { execFile } from "node:child_process";
 import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
@@ -1753,7 +1753,7 @@ async function detectPlaywrightBrowserSupport(capability: "screenshots" | "video
     return {
       available: false,
       tool: "Playwright",
-      detail: `Install playwright and a browser with \`npm install -D playwright && npx playwright install chromium\`. Detected error: ${formatError(error)}`,
+      detail: `Install playwright and a browser with \`bun add -d playwright && bunx playwright install chromium\`. Detected error: ${formatError(error)}`,
     };
   }
 }
