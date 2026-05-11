@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "pass",
+    "checked_at": "2026-05-11T17:01:12.255Z",
+    "base_ref": "main",
+    "head_ref": "main",
+    "head_sha": "a39fea1",
+    "manifest_path": "/root/tmp/samotest-issue36-evidence-branch/evidence/issue36-screenshot/hosted-manifest.json",
+    "manifest_url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue36-screenshot-evidence/evidence/issue36-screenshot/hosted-manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 1,
+      "failed": 0,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-screenshot",
+    "scenario_id": "llm-screenshot-smoke",
+    "command": "samotest record llm-screenshot-smoke --format screenshot --run-id issue36-llm-screenshot --output .samotest/evidence",
+    "provider": "github",
+    "target": "issue 36"
+  },
+  "scenarios": [
+    {
+      "id": "llm-screenshot-smoke",
+      "required": true,
+      "status": "pass",
+      "fresh": true,
+      "reason": "Evidence passed and matches the requested refs.",
+      "artifacts": [
+        {
+          "type": "screenshot",
+          "name": "llm-screenshot-smoke-screenshot",
+          "path": "artifacts/screenshot.png",
+          "sha256": "e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0",
+          "url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/issue36-screenshot-evidence/evidence/issue36-screenshot/screenshot.png"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": []
+}
