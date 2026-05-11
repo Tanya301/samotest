@@ -209,7 +209,7 @@ async function writeEvidenceFixture(
         schema_version: "0.1",
         tool: {
           name: "samotest",
-          version: "0.1.3",
+          version: "0.1.4",
         },
         run: {
           id: "run-1",

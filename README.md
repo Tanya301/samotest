@@ -4,7 +4,7 @@ Manual test scenario runner and evidence gate CLI for reviewer-visible dogfoodin
 
 ## Release Status
 
-`samotest` v0.1.3 is ready for early real use through a local checkout, a local tarball from `npm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
+`samotest` v0.1.4 is ready for early real use through a local checkout, a local tarball from `npm pack`, or a published package once available. Evidence upload/comment posting is available for GitLab targets when `GITLAB_TOKEN` or `GLAB_TOKEN` is configured; use `--dry-run` to inspect the exact upload and comment actions without posting.
 
 ## Install For Local Dogfooding
 
@@ -23,7 +23,7 @@ To test the installable package path without publishing:
 npm ci
 npm pack --dry-run
 npm pack
-npm install -g ./samotest-0.1.3.tgz
+npm install -g ./samotest-0.1.4.tgz
 samotest --version
 ```
 
