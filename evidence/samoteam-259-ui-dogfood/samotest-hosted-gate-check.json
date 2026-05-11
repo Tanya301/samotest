@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "pass",
+    "checked_at": "2026-05-11T17:28:28.295Z",
+    "base_ref": "prod",
+    "head_ref": "prod",
+    "head_sha": "production-samo.team-2026-05-11",
+    "manifest_path": "/root/tmp/samoteam-259-evidence-branch/evidence/samoteam-259-ui-dogfood/samotest-hosted-manifest.json",
+    "manifest_url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/samoteam-work-item-259-evidence/evidence/samoteam-259-ui-dogfood/samotest-hosted-manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 1,
+      "failed": 0,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "samoteam-prod-video-259",
+    "scenario_id": "samoteam-prod-video",
+    "command": "samotest record samoteam-prod-video --format video --run-id samoteam-prod-video-259 --output .samotest/evidence",
+    "provider": "gitlab",
+    "target": "issue 259"
+  },
+  "scenarios": [
+    {
+      "id": "samoteam-prod-video",
+      "required": true,
+      "status": "pass",
+      "fresh": true,
+      "reason": "Evidence passed and matches the requested refs.",
+      "artifacts": [
+        {
+          "type": "video",
+          "name": "samoteam-prod-video-video",
+          "path": "artifacts/video.webm",
+          "sha256": "b107ad26c8e9531bf7810f8ece56ec4c0bd5f78d0bd4f725dc49cbc8a0d17154",
+          "url": "https://raw.githubusercontent.com/Tanya301/samotest/codex/samoteam-work-item-259-evidence/evidence/samoteam-259-ui-dogfood/samotest-record-video.webm"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": []
+}
