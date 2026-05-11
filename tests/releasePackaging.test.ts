@@ -10,11 +10,25 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 }
 
 describe("release packaging", () => {
+  it("keeps package metadata and README release docs aligned with the public release", async () => {
+    const packageJson = await readJson("package.json");
+    const readme = await readFile("README.md", "utf8");
+    const license = await readFile("LICENSE", "utf8");
+
+    assert.equal(packageJson.version, "0.1.3");
+    assert.equal(packageJson.license, "Apache-2.0");
+    assert.match(license, /Apache License\s+Version 2\.0/);
+
+    assert.match(readme, /`samotest` v0\.1\.3 is released/);
+    assert.match(readme, /samotest-0\.1\.3\.tgz/);
+    assert.doesNotMatch(readme, /v0\.1\.0|samotest-0\.1\.0\.tgz|placeholder/i);
+  });
+
   it("declares local dogfooding package metadata and a constrained tarball surface", async () => {
     const packageJson = await readJson("package.json");
 
     assert.equal(packageJson.name, "samotest");
-    assert.equal(packageJson.version, "0.1.0");
+    assert.equal(packageJson.version, "0.1.3");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
     assert.equal(packageJson.private, undefined);
     assert.deepEqual(packageJson.files, ["dist/", "docs/", "samples/", "LICENSE", "README.md", "SPEC.md"]);
@@ -33,7 +47,7 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /v0\.1\.0 is released/);
+    assert.match(readme, /v0\.1\.3 is released/);
     assert.match(readme, /samotest doctor/);
     assert.match(readme, /samotest record my-browser-scenario --format video/);
     assert.match(readme, /record --format gif.*video fallback evidence/);
@@ -65,7 +79,7 @@ describe("release packaging", () => {
 
       const bin = await run(join(installDir, "node_modules/.bin/samotest"), ["--version"], { cwd: installDir });
 
-      assert.equal(bin.stdout, "0.1.0\n");
+      assert.equal(bin.stdout, "0.1.3\n");
       assert.equal(bin.stderr, "");
     } finally {
       await rm(tempDir, { recursive: true, force: true });

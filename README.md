@@ -4,7 +4,7 @@ Manual test scenario runner and evidence gate CLI for reviewer-visible dogfoodin
 
 ## Release Status
 
-`samotest` v0.1.0 is released. Current dogfooding should use a local checkout through `npm link` or a local tarball from `npm pack` while Sprint 3 recorder integrations settle.
+`samotest` v0.1.3 is released. Current dogfooding should use a local checkout through `npm link` or a local tarball from `npm pack` while Sprint 3 recorder integrations settle.
 
 ## Install For Local Dogfooding
 
@@ -23,7 +23,7 @@ To test the installable package path without publishing:
 npm ci
 npm pack --dry-run
 npm pack
-npm install -g ./samotest-0.1.0.tgz
+npm install -g ./samotest-0.1.3.tgz
 samotest --version
 ```
 
@@ -41,12 +41,6 @@ Validate scenarios:
 
 ```sh
 samotest scenario validate .samotest/scenarios/my-scenario.yaml
-```
-
-The scenario validation library is covered by tests today, but the CLI command is still a reviewed placeholder and exits with `scenario validate is not implemented yet`. Until that command is wired, validate by running:
-
-```sh
-npm test -- tests/scenarioValidation.test.ts
 ```
 
 Run a guided scenario and record step results:
