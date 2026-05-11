@@ -200,7 +200,7 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
   }
 
   if (command === "--version" || command === "-V") {
-    return { exitCode: 0, stdout: "0.1.5\n", stderr: "" };
+    return { exitCode: 0, stdout: "0.2.0\n", stderr: "" };
   }
 
   if (command === "init") {
