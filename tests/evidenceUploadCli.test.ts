@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "bun:test";
 import { runCli } from "../src/cli.js";
 
 describe("samotest evidence upload", () => {
@@ -53,7 +53,7 @@ describe("samotest evidence upload", () => {
       assert.match(result.stdout, /Scenario: checkout-discount-demo/);
       assert.match(result.stdout, /Provider: gitlab/);
       assert.match(result.stdout, /Target: merge_request 25/);
-      assert.match(result.stdout, /Command: npm run test:e2e -- --grep checkout/);
+      assert.match(result.stdout, /Command: bun run test:e2e -- --grep checkout/);
       assert.match(result.stdout, /\| checkout-discount-demo \| required \| fail \| fresh \| artifacts\/terminal\.log \| Artifact artifacts\/terminal\.log is missing a URL required for review\. \|/);
 
       assert.equal(await readFile(outputPath, "utf8"), result.stdout.match(/Markdown:\n([\s\S]*)$/)?.[1]);
@@ -130,7 +130,7 @@ describe("samotest evidence upload", () => {
       assert.match(posted.body, /Scenario: checkout-discount-demo/);
       assert.match(posted.body, /Provider: gitlab/);
       assert.match(posted.body, /Target: merge_request 25/);
-      assert.match(posted.body, /Command: npm run test:e2e -- --grep checkout/);
+      assert.match(posted.body, /Command: bun run test:e2e -- --grep checkout/);
       assert.match(posted.body, /\[terminal-output\]\(https:\/\/gitlab\.example\.test\/uploads\/terminal\.log\)/);
       assert.match(posted.body, /Manifest: \[manifest\]\(https:\/\/gitlab\.example\.test\/uploads\/manifest\.json\)/);
       assert.match(posted.body, /### Hosted GitLab uploads/);
@@ -233,7 +233,7 @@ async function writeEvidenceFixture(
           },
         ],
         review: {
-          command: "npm run test:e2e -- --grep checkout",
+          command: "bun run test:e2e -- --grep checkout",
           ...(overrides.review ?? {}),
         },
       },

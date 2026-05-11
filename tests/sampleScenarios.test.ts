@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { inspectEvidence } from "../src/evidence.js";
 import { validateScenarioFile } from "../src/scenarioValidation.js";
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { inspectEvidence } from "../src/evidence.js";
 import { runCli } from "../src/cli.js";
 
@@ -13,12 +13,12 @@ describe("samotest recorder capture", () => {
         screenshot: {
           available: false,
           tool: "Playwright",
-          detail: "Install playwright and a browser with `npx playwright install chromium`.",
+          detail: "Install playwright and a browser with `bunx playwright install chromium`.",
         },
         video: {
           available: false,
           tool: "Playwright",
-          detail: "Install playwright and a browser with `npx playwright install chromium`.",
+          detail: "Install playwright and a browser with `bunx playwright install chromium`.",
         },
         gif: {
           available: false,
@@ -38,7 +38,7 @@ describe("samotest recorder capture", () => {
     assert.match(result.stdout, /screenshot\s+missing\s+Playwright/);
     assert.match(result.stdout, /video\s+missing\s+Playwright/);
     assert.match(result.stdout, /gif\s+missing\s+ffmpeg/);
-    assert.match(result.stdout, /npx playwright install chromium/);
+    assert.match(result.stdout, /bunx playwright install chromium/);
     assert.match(result.stdout, /cast\s+missing\s+asciinema/);
     assert.equal(result.stderr, "");
   });
@@ -140,12 +140,12 @@ result:
           screenshot: {
             available: false,
             tool: "Playwright",
-            detail: "Install playwright and a browser with `npx playwright install chromium`.",
+            detail: "Install playwright and a browser with `bunx playwright install chromium`.",
           },
           video: {
             available: false,
             tool: "Playwright",
-            detail: "Install playwright and a browser with `npx playwright install chromium`.",
+            detail: "Install playwright and a browser with `bunx playwright install chromium`.",
           },
           gif: {
             available: false,
@@ -162,7 +162,7 @@ result:
 
       assert.equal(result.exitCode, 2);
       assert.match(result.stderr, /Screenshot recorder unavailable/);
-      assert.match(result.stderr, /npx playwright install chromium/);
+      assert.match(result.stderr, /bunx playwright install chromium/);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, it } from "node:test";
+import { dirname, isAbsolute, join } from "node:path";
+import { describe, it } from "bun:test";
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -16,19 +16,24 @@ describe("release packaging", () => {
     assert.equal(packageJson.name, "samotest");
     assert.equal(packageJson.version, "0.1.4");
     assert.equal(packageJson.license, "Apache-2.0");
+    assert.equal(packageJson.packageManager, "bun@1.3.13");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
+    assert.deepEqual(packageJson.engines, { bun: ">=1.3.13", node: ">=20" });
     assert.equal(packageJson.private, undefined);
     assert.deepEqual(packageJson.files, ["dist/", "docs/", "samples/", "LICENSE", "README.md", "SPEC.md"]);
 
     const scripts = packageJson.scripts as Record<string, string>;
-    assert.equal(scripts.prepack, "npm run build");
+    assert.equal(scripts.build, "tsc -p tsconfig.build.json && chmod +x dist/cli.js");
+    assert.equal(scripts.prepack, "bun run build");
+    assert.equal(scripts.start, "bun src/cli.ts");
+    assert.equal(scripts.test, "bun test");
   });
 
   it("documents the current quickstart and local recorder workflow", async () => {
     const readme = await readFile("README.md", "utf8");
 
-    assert.match(readme, /npm link/);
-    assert.match(readme, /npm pack --dry-run/);
+    assert.match(readme, /bun link/);
+    assert.match(readme, /bun pm pack --dry-run/);
     assert.match(readme, /samotest init/);
     assert.match(readme, /samotest scenario validate/);
     assert.match(readme, /samotest run my-scenario/);
@@ -46,11 +51,11 @@ describe("release packaging", () => {
     const workflow = await readFile(".github/workflows/pr.yml", "utf8");
 
     assert.match(workflow, /pull_request:/);
-    assert.match(workflow, /node-version: 20/);
-    assert.match(workflow, /run: npm ci/);
-    assert.match(workflow, /run: npm test/);
-    assert.match(workflow, /run: npm run typecheck/);
-    assert.match(workflow, /run: npm run build/);
+    assert.match(workflow, /oven-sh\/setup-bun/);
+    assert.match(workflow, /run: bun install --frozen-lockfile/);
+    assert.match(workflow, /run: bun test/);
+    assert.match(workflow, /run: bun run typecheck/);
+    assert.match(workflow, /run: bun run build/);
   });
 
   it("packs and installs a working samotest --version bin", async () => {
@@ -59,17 +64,28 @@ describe("release packaging", () => {
     const installDir = join(tempDir, "install");
 
     try {
-      await run("npm", ["run", "build"], { cwd });
-      const pack = await run("npm", ["pack", "--pack-destination", tempDir, "--json"], { cwd });
-      const [{ filename }] = JSON.parse(pack.stdout) as Array<{ filename: string }>;
+      await run("bun", ["run", "build"], { cwd });
+      const pack = await run("bun", ["pm", "pack", "--destination", tempDir, "--quiet"], { cwd });
+      const filename = pack.stdout.trim().split(/\r?\n/).at(-1);
+      assert.ok(filename, "bun pm pack should print a tarball filename");
 
-      await run("npm", ["init", "-y"], { cwd: installDir, createCwd: true });
-      await run("npm", ["install", join(tempDir, filename)], { cwd: installDir });
+      await run("bun", ["init", "-y"], { cwd: installDir, createCwd: true });
+      const tarballPath = isAbsolute(filename) ? filename : join(tempDir, filename);
+      await run("bun", ["add", tarballPath], { cwd: installDir });
 
       const bin = await run(join(installDir, "node_modules/.bin/samotest"), ["--version"], { cwd: installDir });
+      const bunOnlyBin = await run(join(installDir, "node_modules/.bin/samotest"), ["--version"], {
+        cwd: installDir,
+        env: {
+          ...process.env,
+          PATH: dirname(process.execPath),
+        },
+      });
 
       assert.equal(bin.stdout, "0.1.4\n");
       assert.equal(bin.stderr, "");
+      assert.equal(bunOnlyBin.stdout, "0.1.4\n");
+      assert.equal(bunOnlyBin.stderr, "");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -79,7 +95,7 @@ describe("release packaging", () => {
 async function run(
   command: string,
   args: string[],
-  options: { cwd: string; createCwd?: boolean },
+  options: { cwd: string; createCwd?: boolean; env?: NodeJS.ProcessEnv },
 ): Promise<{ stdout: string; stderr: string }> {
   if (options.createCwd) {
     await mkdir(options.cwd, { recursive: true });
@@ -87,6 +103,7 @@ async function run(
 
   const child = spawn(command, args, {
     cwd: options.cwd,
+    env: options.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
