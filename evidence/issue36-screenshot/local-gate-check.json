@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-11T17:00:03.599Z",
+    "head_sha": "unknown",
+    "manifest_path": "/root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-screenshot",
+    "scenario_id": "llm-screenshot-smoke"
+  },
+  "scenarios": [
+    {
+      "id": "llm-screenshot-smoke",
+      "required": true,
+      "status": "fail",
+      "fresh": true,
+      "reason": "Artifact artifacts/screenshot.png is missing a URL required for review.",
+      "artifacts": [
+        {
+          "type": "screenshot",
+          "name": "llm-screenshot-smoke-screenshot",
+          "path": "artifacts/screenshot.png",
+          "sha256": "e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "artifact_url_missing",
+      "message": "Artifact artifacts/screenshot.png is missing a URL required for review.",
+      "scenario_id": "llm-screenshot-smoke"
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+# samotest issue #36 screenshot dogfood
+# date: 2026-05-11T16:59:52Z
+# repo: https://github.com/Tanya301/samotest.git
+# commit: a39fea111d8131f1f423101a8d680fd4abfdb22f
+# tag contains: v0.1.4 
+
++ npm ci
+
+added 9 packages, and audited 10 packages in 915ms
+
+3 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
++ npm run build
+
+> samotest@0.1.4 build
+> tsc -p tsconfig.build.json
+
++ npm pack --pack-destination /root/tmp/samotest-issue36-screenshot
+
+> samotest@0.1.4 prepack
+> npm run build
+
+
+> samotest@0.1.4 build
+> tsc -p tsconfig.build.json
+
+npm notice
+npm notice 📦  samotest@0.1.4
+npm notice Tarball Contents
+npm notice 11.4kB LICENSE
+npm notice 3.8kB README.md
+npm notice 27.6kB SPEC.md
+npm notice 55.6kB dist/cli.js
+npm notice 13.9kB dist/evidence.js
+npm notice 15.6kB dist/gate.js
+npm notice 2.4kB dist/scenarioValidation.js
+npm notice 3.2kB docs/samorev-integration.md
+npm notice 2.0kB docs/sprint-1-evidence-attachments.md
+npm notice 988B package.json
+npm notice 401B samples/evidence/sprint1-cli-smoke/artifacts/cli-help-output.log
+npm notice 1.5kB samples/evidence/sprint1-cli-smoke/manifest.json
+npm notice 401B samples/fixtures/sprint1-cli-help-output.log
+npm notice 1.6kB samples/samorev/review-note.md
+npm notice Tarball Details
+npm notice name: samotest
+npm notice version: 0.1.4
+npm notice filename: samotest-0.1.4.tgz
+npm notice package size: 33.8 kB
+npm notice unpacked size: 140.4 kB
+npm notice shasum: 438168e2ad24a1663102139f6b62ef555810b52b
+npm notice integrity: sha512-NW0RYpSZLjeFs[...]psbN1HSJnDy8w==
+npm notice total files: 14
+npm notice
+samotest-0.1.4.tgz
++ cd /root/tmp/samotest-issue36-screenshot/install
++ npm init -y
+Wrote to /root/tmp/samotest-issue36-screenshot/install/package.json:
+
+{
+  "name": "install",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
+
+
+
++ npm install /root/tmp/samotest-issue36-screenshot/samotest-0.1.4.tgz
+
+added 2 packages, and audited 3 packages in 594ms
+
+1 package is looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
++ npm install playwright
+
+added 2 packages, and audited 5 packages in 2s
+
+1 package is looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
++ BIN=/root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest --version
+0.1.4
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest doctor
+Recorder availability
+screenshot available Playwright - Chromium browser can launch for screenshots.
+video      available Playwright - Chromium browser can launch for video.
+gif        available ffmpeg - ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+cast       available asciinema - asciinema 2.4.0
++ cd /root/tmp/samotest-issue36-screenshot/work
++ cat
++ SERVER_PID=1362272
++ trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
++ sleep 1
++ python3 -m http.server 41739 --directory site
++ curl -fsS http://127.0.0.1:41739/
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest init
+Initialized .samotest
++ mkdir -p .samotest/scenarios
++ cat
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest scenario validate .samotest/scenarios/llm-screenshot-smoke.yaml
+Valid scenario: llm-screenshot-smoke (.samotest/scenarios/llm-screenshot-smoke.yaml)
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest record llm-screenshot-smoke --format screenshot --run-id issue36-llm-screenshot --output .samotest/evidence
+Recorded screenshot evidence issue36-llm-screenshot at .samotest/evidence/issue36-llm-screenshot/manifest.json
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest evidence inspect .samotest/evidence/issue36-llm-screenshot
++ tee /root/tmp/samotest-issue36-screenshot/evidence-inspect.txt
+Evidence run issue36-llm-screenshot
+Scenario: llm-screenshot-smoke
+Status: passed
+Source: unknown
+Artifacts: 1
+  - screenshot llm-screenshot-smoke-screenshot artifacts/screenshot.png sha256:e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0
+Observations: 1
+  - capture-localhost-page passed Captured browser screenshot for http://127.0.0.1:41739/.
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest gate check --manifest .samotest/evidence/issue36-llm-screenshot/manifest.json --format json
++ true
++ cat /root/tmp/samotest-issue36-screenshot/local-gate-check.json
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-11T17:00:03.599Z",
+    "head_sha": "unknown",
+    "manifest_path": "/root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "issue36-llm-screenshot",
+    "scenario_id": "llm-screenshot-smoke"
+  },
+  "scenarios": [
+    {
+      "id": "llm-screenshot-smoke",
+      "required": true,
+      "status": "fail",
+      "fresh": true,
+      "reason": "Artifact artifacts/screenshot.png is missing a URL required for review.",
+      "artifacts": [
+        {
+          "type": "screenshot",
+          "name": "llm-screenshot-smoke-screenshot",
+          "path": "artifacts/screenshot.png",
+          "sha256": "e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "artifact_url_missing",
+      "message": "Artifact artifacts/screenshot.png is missing a URL required for review.",
+      "scenario_id": "llm-screenshot-smoke"
+    }
+  ]
+}
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest gate report --manifest .samotest/evidence/issue36-llm-screenshot/manifest.json --format markdown
++ true
++ cat /root/tmp/samotest-issue36-screenshot/local-gate-report.md
+## samotest evidence gate: fail
+
+Checked: 2026-05-11T17:00:03.685Z
+Head: unknown
+Run: issue36-llm-screenshot
+Scenario: llm-screenshot-smoke
+Provider: unknown
+Target: unknown
+Command: unknown
+Summary: 0 passed, 1 failed, 0 warned, 0 waived
+Review completeness: incomplete - hosted artifact URLs are required before review.
+Manifest: /root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/manifest.json
+
+| Scenario | Requirement | Status | Fresh | Evidence | Reason |
+| --- | --- | --- | --- | --- | --- |
+| llm-screenshot-smoke | required | fail | fresh | artifacts/screenshot.png | Artifact artifacts/screenshot.png is missing a URL required for review. |
+
+### Gate errors
+- artifact_url_missing: Artifact artifacts/screenshot.png is missing a URL required for review.
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest evidence package .samotest/evidence/issue36-llm-screenshot --format zip
++ tee /root/tmp/samotest-issue36-screenshot/package-output.txt
+Created evidence package /root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/issue36-llm-screenshot-evidence.zip
+Entries: 2
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest evidence upload .samotest/evidence/issue36-llm-screenshot --provider gitlab --repo NikolayS/samo.team --issue 255 --dry-run --output /root/tmp/samotest-issue36-screenshot/gitlab-dry-run-comment.md
++ cat /root/tmp/samotest-issue36-screenshot/gitlab-dry-run.txt
+Provider: gitlab
+Target: issue 255
+Project: NikolayS/samo.team
+Upload action: POST /projects/:id/uploads artifacts/screenshot.png
+Upload action: POST /projects/:id/uploads manifest.json
+Comment action: POST /projects/:id/issues/255/notes
+Artifact URL required: artifacts/screenshot.png -> hosted GitLab upload URL
+Manifest URL required: manifest.json -> hosted GitLab upload URL
+Markdown output: /root/tmp/samotest-issue36-screenshot/gitlab-dry-run-comment.md
+Dry run: no uploads or comments were posted.
+
+Markdown:
+## samotest evidence gate: fail
+
+Checked: 2026-05-11T17:00:03.878Z
+Head: unknown
+Run: issue36-llm-screenshot
+Scenario: llm-screenshot-smoke
+Provider: unknown
+Target: unknown
+Command: unknown
+Summary: 0 passed, 1 failed, 0 warned, 0 waived
+Review completeness: incomplete - hosted artifact URLs are required before review.
+Manifest: /root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/manifest.json
+
+| Scenario | Requirement | Status | Fresh | Evidence | Reason |
+| --- | --- | --- | --- | --- | --- |
+| llm-screenshot-smoke | required | fail | fresh | artifacts/screenshot.png | Artifact artifacts/screenshot.png is missing a URL required for review. |
+
+### Gate errors
+- artifact_url_missing: Artifact artifacts/screenshot.png is missing a URL required for review.
++ /root/tmp/samotest-issue36-screenshot/install/node_modules/.bin/samotest evidence upload .samotest/evidence/issue36-llm-screenshot --provider github --repo Tanya301/samotest --pr 34 --dry-run --output /root/tmp/samotest-issue36-screenshot/github-dry-run-comment.md
++ cat /root/tmp/samotest-issue36-screenshot/github-dry-run.txt
+Provider: github
+Target: pull_request 34
+Project: Tanya301/samotest
+Comment action: gh pr comment 34 --body-file /root/tmp/samotest-issue36-screenshot/github-dry-run-comment.md
+Artifact URL required: artifacts/screenshot.png -> hosted URL
+Manifest URL required: manifest.json -> hosted URL
+Markdown output: /root/tmp/samotest-issue36-screenshot/github-dry-run-comment.md
+Dry run: no uploads or comments were posted.
+
+Markdown:
+## samotest evidence gate: fail
+
+Checked: 2026-05-11T17:00:03.967Z
+Head: unknown
+Run: issue36-llm-screenshot
+Scenario: llm-screenshot-smoke
+Provider: unknown
+Target: unknown
+Command: unknown
+Summary: 0 passed, 1 failed, 0 warned, 0 waived
+Review completeness: incomplete - hosted artifact URLs are required before review.
+Manifest: /root/tmp/samotest-issue36-screenshot/work/.samotest/evidence/issue36-llm-screenshot/manifest.json
+
+| Scenario | Requirement | Status | Fresh | Evidence | Reason |
+| --- | --- | --- | --- | --- | --- |
+| llm-screenshot-smoke | required | fail | fresh | artifacts/screenshot.png | Artifact artifacts/screenshot.png is missing a URL required for review. |
+
+### Gate errors
+- artifact_url_missing: Artifact artifacts/screenshot.png is missing a URL required for review.
++ file .samotest/evidence/issue36-llm-screenshot/artifacts/screenshot.png
+.samotest/evidence/issue36-llm-screenshot/artifacts/screenshot.png: PNG image data, 1280 x 720, 8-bit/color RGB, non-interlaced
++ find .samotest/evidence/issue36-llm-screenshot -maxdepth 3 -type f
++ sort
+.samotest/evidence/issue36-llm-screenshot/artifacts/screenshot.png
+.samotest/evidence/issue36-llm-screenshot/issue36-llm-screenshot-evidence.zip
+.samotest/evidence/issue36-llm-screenshot/manifest.json

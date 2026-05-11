@@ -1,0 +1,16 @@
+id: llm-screenshot-smoke
+title: LLM screenshot evidence smoke
+owner: "@qa"
+priority: required
+target:
+  type: browser
+  url: "http://127.0.0.1:41739/"
+steps:
+  - id: capture-localhost-page
+    instruction: "Open the localhost smoke page and capture a screenshot."
+    url: "http://127.0.0.1:41739/"
+    expected: "The page shows the samotest #36 screenshot evidence headline."
+result:
+  required_observations:
+    - "Screenshot artifact is a PNG image."
+    - "The screenshot contains the LLM-run visual smoke text."

@@ -1,0 +1,13 @@
+7c405b3fa8d1565d681e9bc27e52a2f6ef32bb14300a4a07ba9a0e42a9074792  /root/tmp/samotest-issue36-screenshot/transcript.txt
+81dae521550d7e4ff687751f69247365f42c9404ffce86ebc3dbd4ba835b6052  /root/tmp/samotest-issue36-screenshot/llm-screenshot-smoke.yaml
+f0eb41ef030bb4e94d864f719f7856f9950f9efee28122c0b492e7b8b4fa0ec9  /root/tmp/samotest-issue36-screenshot/manifest.json
+e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0  /root/tmp/samotest-issue36-screenshot/screenshot.png
+b943a295bfffc32f2f5260e74448ea47536a32fb3b4e041c4068328bacb6ddae  /root/tmp/samotest-issue36-screenshot/local-gate-check.json
+1cd4cd72cd0208174781e446898642815a75d6e5e330dd6f8c47fe0fe61fca12  /root/tmp/samotest-issue36-screenshot/local-gate-report.md
+2038285b8ae473300f2ee69d4e530057497fd748a3cb408cd19050f6bdf6dc37  /root/tmp/samotest-issue36-screenshot/package-output.txt
+0645e002f06a80f3ce915c81b5db9f64f0ccc6c45fd85a276204d03c4b60773d  /root/tmp/samotest-issue36-screenshot/gitlab-dry-run.txt
+f9dea54d88bd5fd84a55bf196d277f1c9e06cc22b5842f224f62331418c96d05  /root/tmp/samotest-issue36-screenshot/gitlab-dry-run-comment.md
+873dae6d1cfef20d7d156060d979766f8de9a1a610cd687479db819638cf840e  /root/tmp/samotest-issue36-screenshot/github-dry-run.txt
+68e826fee902928df2af44f7f6f615ac0df37f6092abd55aa686f6d7e9a72c68  /root/tmp/samotest-issue36-screenshot/github-dry-run-comment.md
+dead7f0e359ac49c0d994efc6186eafe30a98278e1d48d6ea32075c29c3beda3  /root/tmp/samotest-issue36-screenshot/issue36-llm-screenshot-evidence.zip
+47db0bb39f58b88a060bba49c0153ab4ebc5d873d81e95c055361149c2ea1ebb  /root/tmp/samotest-issue36-screenshot/issue36-llm-screenshot-evidence.zip.base64

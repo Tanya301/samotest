@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "run": {
+    "id": "issue36-llm-screenshot",
+    "scenario_id": "llm-screenshot-smoke",
+    "status": "passed",
+    "started_at": "2026-05-11T17:00:02.636Z",
+    "finished_at": "2026-05-11T17:00:03.435Z",
+    "required": true
+  },
+  "source": {
+    "commit": "unknown"
+  },
+  "environment": {
+    "os": "linux",
+    "browser": "chromium",
+    "redacted": true
+  },
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "name": "llm-screenshot-smoke-screenshot",
+      "path": "artifacts/screenshot.png",
+      "sha256": "e975d32d40a5665f33d0922d00cc7dda7e4187f6dcd26ee7928a725be21871d0"
+    }
+  ],
+  "observations": [
+    {
+      "step_id": "capture-localhost-page",
+      "status": "passed",
+      "note": "Captured browser screenshot for http://127.0.0.1:41739/."
+    }
+  ]
+}
