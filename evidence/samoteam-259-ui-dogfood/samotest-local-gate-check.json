@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "gate": {
+    "status": "fail",
+    "checked_at": "2026-05-11T17:27:12.766Z",
+    "head_sha": "unknown",
+    "manifest_path": "/root/tmp/samoteam-ui-dogfood-259/work/.samotest/evidence/samoteam-prod-video-259/manifest.json",
+    "summary": {
+      "required": 1,
+      "passed": 0,
+      "failed": 1,
+      "warned": 0,
+      "waived": 0
+    }
+  },
+  "evidence": {
+    "run_id": "samoteam-prod-video-259",
+    "scenario_id": "samoteam-prod-video"
+  },
+  "scenarios": [
+    {
+      "id": "samoteam-prod-video",
+      "required": true,
+      "status": "fail",
+      "fresh": true,
+      "reason": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "artifacts": [
+        {
+          "type": "video",
+          "name": "samoteam-prod-video-video",
+          "path": "artifacts/video.webm",
+          "sha256": "b107ad26c8e9531bf7810f8ece56ec4c0bd5f78d0bd4f725dc49cbc8a0d17154"
+        }
+      ],
+      "waiver": null
+    }
+  ],
+  "errors": [
+    {
+      "code": "artifact_url_missing",
+      "message": "Artifact artifacts/video.webm is missing a URL required for review.",
+      "scenario_id": "samoteam-prod-video"
+    }
+  ]
+}

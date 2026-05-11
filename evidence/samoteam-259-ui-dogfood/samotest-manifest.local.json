@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1",
+  "tool": {
+    "name": "samotest",
+    "version": "0.1.4"
+  },
+  "run": {
+    "id": "samoteam-prod-video-259",
+    "scenario_id": "samoteam-prod-video",
+    "status": "passed",
+    "started_at": "2026-05-11T17:27:11.450Z",
+    "finished_at": "2026-05-11T17:27:12.579Z",
+    "required": true
+  },
+  "source": {
+    "commit": "unknown"
+  },
+  "environment": {
+    "os": "linux",
+    "browser": "chromium",
+    "redacted": true
+  },
+  "artifacts": [
+    {
+      "type": "video",
+      "name": "samoteam-prod-video-video",
+      "path": "artifacts/video.webm",
+      "sha256": "b107ad26c8e9531bf7810f8ece56ec4c0bd5f78d0bd4f725dc49cbc8a0d17154"
+    }
+  ],
+  "observations": [
+    {
+      "step_id": "open-prod-landing",
+      "status": "passed",
+      "note": "Captured browser video for https://samo.team/."
+    }
+  ]
+}

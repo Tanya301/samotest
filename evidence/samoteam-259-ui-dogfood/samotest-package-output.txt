@@ -1,0 +1,2 @@
+Created evidence package /root/tmp/samoteam-ui-dogfood-259/work/.samotest/evidence/samoteam-prod-video-259/samoteam-prod-video-259-evidence.zip
+Entries: 2

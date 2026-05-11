@@ -1,0 +1,45 @@
+{
+  "target": "https://samo.team/",
+  "observations": [
+    {
+      "label": "landing title",
+      "ok": true,
+      "value": "SAMO | SAMO Team"
+    },
+    {
+      "label": "hero visible",
+      "ok": true,
+      "value": false
+    },
+    {
+      "label": "product section visible",
+      "ok": true,
+      "value": true
+    },
+    {
+      "label": "availability section visible",
+      "ok": true,
+      "value": true
+    },
+    {
+      "label": "screenshots section visible",
+      "ok": true,
+      "value": true
+    },
+    {
+      "label": "theme localStorage after toggle",
+      "ok": true,
+      "value": "light"
+    },
+    {
+      "label": "login url",
+      "ok": true,
+      "value": "https://samo.team/login"
+    },
+    {
+      "label": "login page has sign in affordance",
+      "ok": true,
+      "value": true
+    }
+  ]
+}

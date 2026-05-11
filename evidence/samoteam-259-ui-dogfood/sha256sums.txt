@@ -1,0 +1,12 @@
+ed62390c2412fc4826dfd2ab8539d93132f54a6ac33070c426b7f855d77b831c  evidence/samoteam-259-ui-dogfood/gitlab-dry-run-comment.md
+fabd305da7e1085f8f7d6d9c454893095c13a8f9c79f99a4c6cb5015c5e41b8f  evidence/samoteam-259-ui-dogfood/gitlab-dry-run.txt
+edcbae4a16ec7c5d64046fb7a78872ed4ebcf81d02ba45d3919225671ded4de9  evidence/samoteam-259-ui-dogfood/observations.json
+3aaf6af295e511d3ec7bce158678a0c27f46eb23d1202e69aa3eef385cf543a6  evidence/samoteam-259-ui-dogfood/samoteam-ui-dogfood-259.gif
+178b3f939bcb7076c631049414ac74879d1be8b116060d06877a7c7993f88ae3  evidence/samoteam-259-ui-dogfood/samoteam-ui-interaction.webm
+c834adae760ec6819b56866354bfc22519bc6b86b151a4c56f71a01647c66731  evidence/samoteam-259-ui-dogfood/samotest-evidence-inspect.txt
+3aaed9263162fb1ee24df319ed757573fdf3b7c81fc4ba83b34a3d3413781dd3  evidence/samoteam-259-ui-dogfood/samotest-evidence.zip
+be22beb9389c115fa10c1612dfc406602669d22e7f39a10385f3687dbacbc90e  evidence/samoteam-259-ui-dogfood/samotest-hosted-manifest.json
+f638f73d99f0da86e1430cdd047e9918b451d84849f8900c3a835d0a4b577d5d  evidence/samoteam-259-ui-dogfood/samotest-local-gate-check.json
+d9ba61c9f3d02c79b5e5db271ce810de6bcb76e4fbf1dc4b96d0b185e4da9ee6  evidence/samoteam-259-ui-dogfood/samotest-manifest.local.json
+cab8ca031b123ee2eeaf12af4d1e594112b5cd1b47fdb1477a45459086202e3e  evidence/samoteam-259-ui-dogfood/samotest-package-output.txt
+b107ad26c8e9531bf7810f8ece56ec4c0bd5f78d0bd4f725dc49cbc8a0d17154  evidence/samoteam-259-ui-dogfood/samotest-record-video.webm

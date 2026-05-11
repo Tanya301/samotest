@@ -1,0 +1,8 @@
+Evidence run samoteam-prod-video-259
+Scenario: samoteam-prod-video
+Status: passed
+Source: unknown
+Artifacts: 1
+  - video samoteam-prod-video-video artifacts/video.webm sha256:b107ad26c8e9531bf7810f8ece56ec4c0bd5f78d0bd4f725dc49cbc8a0d17154
+Observations: 1
+  - open-prod-landing passed Captured browser video for https://samo.team/.
