@@ -47,9 +47,9 @@ describe("samotest recorder capture", () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-record-"));
 
     try {
-      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
       await writeFile(
-        join(cwd, ".samotest/scenarios/browser-checkout.yaml"),
+        join(cwd, "samo/scenarios/browser-checkout.yaml"),
         `id: browser-checkout
 title: Browser checkout smoke
 owner: "@team-web"
@@ -75,7 +75,7 @@ result:
           "--run-id",
           "record-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -93,7 +93,7 @@ result:
       assert.match(result.stdout, /Recorded screenshot evidence record-001/);
       assert.match(result.stdout, /manifest\.json/);
 
-      const runDir = join(cwd, ".samotest/evidence/record-001");
+      const runDir = join(cwd, ".samo/evidence/record-001");
       const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
       assert.equal(manifest.run.id, "record-001");
       assert.equal(manifest.run.scenario_id, "browser-checkout");
@@ -115,9 +115,9 @@ result:
     const cwd = await mkdtemp(join(tmpdir(), "samotest-record-missing-"));
 
     try {
-      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
       await writeFile(
-        join(cwd, ".samotest/scenarios/browser-checkout.yaml"),
+        join(cwd, "samo/scenarios/browser-checkout.yaml"),
         `id: browser-checkout
 title: Browser checkout smoke
 owner: "@team-web"
@@ -183,7 +183,7 @@ result:
           "--run-id",
           "record-video-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -200,7 +200,7 @@ result:
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /Recorded video evidence record-video-001/);
 
-      const runDir = join(cwd, ".samotest/evidence/record-video-001");
+      const runDir = join(cwd, ".samo/evidence/record-video-001");
       const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
       assert.equal(manifest.environment.browser, "stub-chromium");
       assert.equal(manifest.artifacts[0].type, "video");
@@ -230,7 +230,7 @@ result:
           "--run-id",
           "record-video-duration-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -245,7 +245,7 @@ result:
       );
 
       assert.equal(result.exitCode, 0, result.stderr);
-      const manifest = JSON.parse(await readFile(join(cwd, ".samotest/evidence/record-video-duration-001/manifest.json"), "utf8"));
+      const manifest = JSON.parse(await readFile(join(cwd, ".samo/evidence/record-video-duration-001/manifest.json"), "utf8"));
       assert.match(manifest.observations[0].note, /1250ms/);
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -267,7 +267,7 @@ result:
           "--run-id",
           "record-gif-duration-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -291,7 +291,7 @@ result:
       );
 
       assert.equal(result.exitCode, 0, result.stderr);
-      const manifest = JSON.parse(await readFile(join(cwd, ".samotest/evidence/record-gif-duration-001/manifest.json"), "utf8"));
+      const manifest = JSON.parse(await readFile(join(cwd, ".samo/evidence/record-gif-duration-001/manifest.json"), "utf8"));
       assert.equal(manifest.artifacts[1].type, "gif");
       assert.match(manifest.observations[0].note, /1500ms/);
     } finally {
@@ -332,7 +332,7 @@ exit 0
           "--run-id",
           "record-gif-ffmpeg-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -355,7 +355,7 @@ exit 0
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /Recorded gif evidence record-gif-ffmpeg-001/);
 
-      const runDir = join(cwd, ".samotest/evidence/record-gif-ffmpeg-001");
+      const runDir = join(cwd, ".samo/evidence/record-gif-ffmpeg-001");
       const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
       assert.equal(manifest.artifacts[1].type, "gif");
       assert.equal(await readFile(join(runDir, "artifacts/animation.gif"), "utf8"), "GIF89a");
@@ -379,7 +379,7 @@ exit 0
           "--run-id",
           "record-gif-direct-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -402,7 +402,7 @@ exit 0
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /Recorded gif evidence record-gif-direct-001/);
 
-      const runDir = join(cwd, ".samotest/evidence/record-gif-direct-001");
+      const runDir = join(cwd, ".samo/evidence/record-gif-direct-001");
       const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
       assert.equal(manifest.artifacts.length, 1);
       assert.equal(manifest.artifacts[0].type, "gif");
@@ -426,7 +426,7 @@ exit 0
           "--run-id",
           "record-gif-output-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -444,7 +444,7 @@ exit 0
       assert.match(result.stdout, /Copied gif recording to docs\/demo\.gif/);
       assert.equal(await readFile(join(cwd, "docs/demo.gif"), "utf8"), "GIF89a");
 
-      const runDir = join(cwd, ".samotest/evidence/record-gif-output-001");
+      const runDir = join(cwd, ".samo/evidence/record-gif-output-001");
       const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
       assert.equal(manifest.artifacts[0].path, "artifacts/animation.gif");
     } finally {
@@ -467,7 +467,7 @@ exit 0
           "--run-id",
           "record-gif-001",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -490,7 +490,7 @@ exit 0
       assert.match(result.stdout, /GIF conversion unavailable/);
       assert.match(result.stdout, /Recorded video fallback evidence record-gif-001/);
 
-      const manifest = JSON.parse(await readFile(join(cwd, ".samotest/evidence/record-gif-001/manifest.json"), "utf8"));
+      const manifest = JSON.parse(await readFile(join(cwd, ".samo/evidence/record-gif-001/manifest.json"), "utf8"));
       assert.equal(manifest.artifacts[0].type, "video");
       assert.equal(manifest.artifacts[0].path, "artifacts/video.webm");
     } finally {
@@ -528,9 +528,9 @@ exit 0
 });
 
 async function writeBrowserScenario(cwd: string, recordingFields = ""): Promise<void> {
-  await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+  await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
   await writeFile(
-    join(cwd, ".samotest/scenarios/browser-checkout.yaml"),
+    join(cwd, "samo/scenarios/browser-checkout.yaml"),
     `id: browser-checkout
 title: Browser checkout smoke
 owner: "@team-web"
@@ -551,9 +551,9 @@ result:
 }
 
 async function writeTerminalScenario(cwd: string): Promise<void> {
-  await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+  await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
   await writeFile(
-    join(cwd, ".samotest/scenarios/terminal-smoke.yaml"),
+    join(cwd, "samo/scenarios/terminal-smoke.yaml"),
     `id: terminal-smoke
 title: Terminal smoke
 owner: "@team-cli"

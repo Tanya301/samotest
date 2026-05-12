@@ -15,7 +15,7 @@ describe("samotest evidence upload", () => {
 
   it("posts a GitHub PR evidence summary and records provider-owned manifest metadata", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-github-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const requests: Array<{ url: string; method: string; body?: unknown; authorization?: string | null }> = [];
     const originalFetch = globalThis.fetch;
 
@@ -103,7 +103,7 @@ describe("samotest evidence upload", () => {
 
   it("prints an exact GitLab MR dry-run upload and comment plan with review-complete URL requirements", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const outputPath = join(cwd, "gitlab-mr-comment.md");
 
     try {
@@ -154,7 +154,7 @@ describe("samotest evidence upload", () => {
 
   it("posts a live GitLab comment payload rebuilt with hosted URLs and run metadata", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const requests: Array<{ url: string; method: string; body?: unknown }> = [];
     const originalFetch = globalThis.fetch;
 
@@ -247,7 +247,7 @@ describe("samotest evidence upload", () => {
 
   it("fails visibly instead of writing a local fallback when provider auth is missing", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-no-auth-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir, {
@@ -284,7 +284,7 @@ describe("samotest evidence upload", () => {
 
   it("prints a GitLab issue dry-run comment action when --issue is provided", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);
@@ -316,7 +316,7 @@ describe("samotest evidence upload", () => {
 
   it("rejects unsupported providers before preparing or posting comments", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const outputPath = join(cwd, "invalid-provider.md");
 
     try {

@@ -39,12 +39,12 @@ Initialize a repository for local scenarios and evidence:
 samotest init
 ```
 
-Add or copy scenario YAML files into `.samotest/scenarios/`. The committed sample scenarios in this repo are under `.samotest/scenarios/` and can be used as schema examples.
+Add or copy scenario YAML files into `samo/scenarios/`. Runtime config and generated evidence belong under `.samo/`; user-reviewable scenario and policy files belong under `samo/`.
 
 Validate scenarios:
 
 ```sh
-samotest scenario validate .samotest/scenarios/my-scenario.yaml
+samotest scenario validate samo/scenarios/my-scenario.yaml
 ```
 
 The command exits non-zero with field-level errors when the scenario is invalid.
@@ -52,7 +52,7 @@ The command exits non-zero with field-level errors when the scenario is invalid.
 Run a guided scenario and record step results:
 
 ```sh
-samotest run my-scenario --output .samotest/evidence --run-id local-smoke
+samotest run my-scenario --output .samo/evidence --run-id local-smoke
 ```
 
 Attach evidence during the prompt with lines such as:

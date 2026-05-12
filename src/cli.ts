@@ -103,9 +103,9 @@ const sprintCommands = [
 
 const starterConfig = `schema_version: "0.1"
 evidence:
-  directory: ".samotest/evidence"
+  directory: ".samo/evidence"
 scenarios:
-  directory: ".samotest/scenarios"
+  directory: "samo/scenarios"
 `;
 
 const helpText = `Usage: samotest <command> [options]
@@ -207,7 +207,7 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
 
   if (command === "init") {
     await initProject(cwd);
-    return { exitCode: 0, stdout: "Initialized .samotest\n", stderr: "" };
+    return { exitCode: 0, stdout: "Initialized samo/ and .samo/\n", stderr: "" };
   }
 
   if (command === "scenario" && subcommand === "validate") {
@@ -382,16 +382,17 @@ async function runScenario(args: string[], options: RunCliOptions): Promise<CliR
 }
 
 async function initProject(cwd: string): Promise<void> {
-  const baseDir = join(cwd, ".samotest");
+  const visibleDir = join(cwd, "samo");
+  const hiddenDir = join(cwd, ".samo");
 
-  await mkdir(join(baseDir, "scenarios"), { recursive: true });
-  await mkdir(join(baseDir, "evidence"), { recursive: true });
-  await writeFile(join(baseDir, "config.yaml"), starterConfig, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+  await mkdir(join(visibleDir, "scenarios"), { recursive: true });
+  await mkdir(join(hiddenDir, "evidence"), { recursive: true });
+  await writeFile(join(hiddenDir, "config.yaml"), starterConfig, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "EEXIST") {
       throw error;
     }
   });
-  await ensureGitignoreEntry(join(cwd, ".gitignore"), ".samotest/evidence/");
+  await ensureGitignoreEntry(join(cwd, ".gitignore"), ".samo/evidence/");
 }
 
 async function ensureGitignoreEntry(path: string, entry: string): Promise<void> {
@@ -439,7 +440,7 @@ async function runScenarioValidate(args: string[], options: RunCliOptions): Prom
     return {
       exitCode: 3,
       stdout: "",
-      stderr: "No scenario path provided and no YAML scenarios found under .samotest/scenarios.\nUsage: samotest scenario validate [path]\n",
+      stderr: "No scenario path provided and no YAML scenarios found under samo/scenarios.\nUsage: samotest scenario validate [path]\n",
     };
   }
 
@@ -486,7 +487,7 @@ async function runScenarioValidate(args: string[], options: RunCliOptions): Prom
 }
 
 async function findDefaultScenarioFiles(cwd: string): Promise<Array<{ displayPath: string; absolutePath: string }>> {
-  const scenarioDir = join(cwd, ".samotest/scenarios");
+  const scenarioDir = join(cwd, "samo/scenarios");
   const entries = await readdir(scenarioDir).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") {
       return [];
@@ -499,7 +500,7 @@ async function findDefaultScenarioFiles(cwd: string): Promise<Array<{ displayPat
     .filter((entry) => [".yaml", ".yml"].includes(extname(entry)))
     .sort()
     .map((entry) => ({
-      displayPath: join(".samotest/scenarios", entry),
+      displayPath: join("samo/scenarios", entry),
       absolutePath: join(scenarioDir, entry),
     }));
 }
@@ -1049,7 +1050,7 @@ async function runEvidenceUpload(args: string[], options: RunCliOptions): Promis
   });
   const body = formatGateReportMarkdown(gate.report);
   const fallbackPath =
-    parsed.output ?? join(cwd, ".samotest", "evidence", `${inspection.manifest.run.id}-${provider.value}-comment.md`);
+    parsed.output ?? join(cwd, ".samo", "evidence", `${inspection.manifest.run.id}-${provider.value}-comment.md`);
   await mkdir(dirname(fallbackPath), { recursive: true });
   await writeFile(fallbackPath, body, "utf8");
   const project = parsed.repo ?? inspection.manifest.source.repo;
@@ -1887,7 +1888,7 @@ function parseEvidenceInspectArgs(args: string[]): EvidenceInspectArgs {
 
 function parseRunArgs(args: string[]): RunCommandArgs {
   const parsed: RunCommandArgs = {
-    output: ".samotest/evidence",
+    output: ".samo/evidence",
     nonInteractive: false,
   };
 
@@ -1922,7 +1923,7 @@ function parseRunArgs(args: string[]): RunCommandArgs {
 
 function parseRecordArgs(args: string[]): RecordCommandArgs {
   const parsed: RecordCommandArgs = {
-    output: ".samotest/evidence",
+    output: ".samo/evidence",
     format: "screenshot",
   };
 
@@ -1954,7 +1955,7 @@ async function loadScenario(
   | { ok: true; scenario: ScenarioDefinition; path: string }
   | { ok: false; exitCode: number; error: string }
 > {
-  const scenarioDir = join(cwd, ".samotest/scenarios");
+  const scenarioDir = join(cwd, "samo/scenarios");
   const entries = await readdir(scenarioDir).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") {
       return undefined;
@@ -1967,7 +1968,7 @@ async function loadScenario(
     return {
       ok: false,
       exitCode: 2,
-      error: "Scenario directory .samotest/scenarios does not exist\n",
+      error: "Scenario directory samo/scenarios does not exist\n",
     };
   }
 
@@ -1975,7 +1976,7 @@ async function loadScenario(
     .filter((entry) => [".yaml", ".yml"].includes(extname(entry)))
     .map((entry) => ({
       absolutePath: join(scenarioDir, entry),
-      relativePath: join(".samotest/scenarios", entry),
+      relativePath: join("samo/scenarios", entry),
     }));
 
   for (const file of scenarioFiles) {

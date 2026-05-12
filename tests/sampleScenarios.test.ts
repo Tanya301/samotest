@@ -10,8 +10,8 @@ const repoRoot = join(import.meta.dirname, "..");
 describe("Sprint 1 sample scenarios and demo evidence", () => {
   it("commits one CLI sample scenario and one browser/UI sample scenario", async () => {
     const scenarioPaths = [
-      ".samotest/scenarios/sprint1-cli-smoke.yaml",
-      ".samotest/scenarios/sprint1-browser-ui-smoke.yaml",
+      "samo/scenarios/sprint1-cli-smoke.yaml",
+      "samo/scenarios/sprint1-browser-ui-smoke.yaml",
     ];
 
     for (const scenarioPath of scenarioPaths) {
