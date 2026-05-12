@@ -1,0 +1,22 @@
+id: readme-demo
+title: README demo GIF
+owner: "@samotest"
+tags: ["docs", "demo", "gif"]
+priority: required
+target:
+  url: "http://127.0.0.1:41733/docs/demo.html"
+recording:
+  mode: browser
+  duration_ms: 3500
+  output_path: docs/demo.gif
+  preferred_formats: ["gif"]
+steps:
+  - id: capture-readme-demo
+    instruction: "Record the samotest README demo page."
+    expected: "The GIF shows the recorder, manifest, and gate report flow."
+    evidence:
+      - type: gif
+        name: readme-demo
+result:
+  required_observations:
+    - "The demo names the product and shows testing evidence output."

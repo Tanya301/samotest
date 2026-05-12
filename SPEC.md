@@ -62,7 +62,7 @@ The first version should focus on reproducible manual test scenarios for local a
 
 1. A contributor runs `samotest record <scenario> --format gif`.
 2. `samotest` uses the scenario's recording instructions and local recorder dependencies to produce a screenshot, browser video, GIF, or terminal cast.
-3. Browser screenshots/videos use Playwright Chromium, GIF conversion uses `ffmpeg`, and terminal casts use `asciinema`.
+3. Browser screenshots/videos use Playwright Chromium, GIF recording samples browser frames for the configured recording duration and uses `ffmpeg`, and terminal casts use `asciinema`.
 4. If `ffmpeg` is unavailable for GIF conversion, `samotest` records browser video fallback evidence when Playwright video is available and prints an actionable install message.
 5. Generated artifacts are referenced by the evidence manifest with sha256 checksums.
 6. Reviewers can inspect the final recording and, where possible, re-render it from the scenario inputs.
@@ -177,6 +177,8 @@ result:
     - "No error toast appears."
 recording:
   mode: browser
+  duration_ms: 3500
+  output_path: docs/demo.gif
   preferred_formats: ["gif", "video"]
   tape: ".samotest/tapes/checkout-discount-demo.tape"
 ```
@@ -198,6 +200,8 @@ recording:
 - `environment`
 - `prerequisites`
 - `recording`
+  - `duration_ms`: optional browser recording hold time before close for video and GIF capture.
+  - `output_path`: optional repo-relative path for a copy of the final requested recording artifact, such as `docs/demo.gif`.
 - `risk`
 - `waiver_policy`
 

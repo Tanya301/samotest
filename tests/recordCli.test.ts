@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "bun:test";
@@ -215,6 +215,243 @@ result:
     }
   });
 
+  it("passes browser recording duration to video recording", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-record-video-duration-"));
+
+    try {
+      await writeBrowserScenario(cwd, "  duration_ms: 1250\n");
+
+      const result = await runCli(
+        [
+          "record",
+          "browser-checkout",
+          "--format",
+          "video",
+          "--run-id",
+          "record-video-duration-001",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          videoRecorder: async ({ outputPath, durationMs }) => {
+            assert.equal(durationMs, 1250);
+            await writeFile(outputPath, "fake timed webm bytes");
+            return {
+              browser: "stub-chromium",
+            };
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      const manifest = JSON.parse(await readFile(join(cwd, ".samotest/evidence/record-video-duration-001/manifest.json"), "utf8"));
+      assert.match(manifest.observations[0].note, /1250ms/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("passes browser recording duration to GIF video capture before conversion", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-record-gif-duration-"));
+
+    try {
+      await writeBrowserScenario(cwd, "  wait_before_close_ms: 1500\n");
+
+      const result = await runCli(
+        [
+          "record",
+          "browser-checkout",
+          "--format",
+          "gif",
+          "--run-id",
+          "record-gif-duration-001",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          recorderDoctor: async () => ({
+            screenshot: { available: true, tool: "Playwright", detail: "ok" },
+            video: { available: true, tool: "Playwright", detail: "ok" },
+            gif: { available: true, tool: "ffmpeg", detail: "ok" },
+            cast: { available: true, tool: "asciinema", detail: "ok" },
+          }),
+          videoRecorder: async ({ outputPath, durationMs }) => {
+            assert.equal(durationMs, 1500);
+            await writeFile(outputPath, "fake timed webm bytes");
+            return {
+              browser: "stub-chromium",
+            };
+          },
+          gifConverter: async ({ outputPath }) => {
+            await writeFile(outputPath, "fake animated gif bytes");
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      const manifest = JSON.parse(await readFile(join(cwd, ".samotest/evidence/record-gif-duration-001/manifest.json"), "utf8"));
+      assert.equal(manifest.artifacts[1].type, "gif");
+      assert.match(manifest.observations[0].note, /1500ms/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("completes GIF recording when the default ffmpeg converter exits", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-record-gif-ffmpeg-"));
+    const originalPath = process.env.PATH;
+
+    try {
+      await writeBrowserScenario(cwd, "  duration_ms: 500\n");
+      const binDir = join(cwd, "bin");
+      await mkdir(binDir, { recursive: true });
+      const ffmpegPath = join(binDir, "ffmpeg");
+      await writeFile(
+        ffmpegPath,
+        `#!/bin/sh
+out=""
+for arg in "$@"; do
+  out="$arg"
+done
+printf 'GIF89a' > "$out"
+exit 0
+`,
+        "utf8",
+      );
+      await chmod(ffmpegPath, 0o755);
+      process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+
+      const result = await runCli(
+        [
+          "record",
+          "browser-checkout",
+          "--format",
+          "gif",
+          "--run-id",
+          "record-gif-ffmpeg-001",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          recorderDoctor: async () => ({
+            screenshot: { available: true, tool: "Playwright", detail: "ok" },
+            video: { available: true, tool: "Playwright", detail: "ok" },
+            gif: { available: true, tool: "ffmpeg", detail: "ok" },
+            cast: { available: true, tool: "asciinema", detail: "ok" },
+          }),
+          videoRecorder: async ({ outputPath, durationMs }) => {
+            assert.equal(durationMs, 500);
+            await writeFile(outputPath, "fake timed webm bytes");
+            return {
+              browser: "stub-chromium",
+            };
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /Recorded gif evidence record-gif-ffmpeg-001/);
+
+      const runDir = join(cwd, ".samotest/evidence/record-gif-ffmpeg-001");
+      const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
+      assert.equal(manifest.artifacts[1].type, "gif");
+      assert.equal(await readFile(join(runDir, "artifacts/animation.gif"), "utf8"), "GIF89a");
+    } finally {
+      process.env.PATH = originalPath;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("records browser GIF directly without creating Playwright video first", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-record-gif-direct-"));
+
+    try {
+      await writeBrowserScenario(cwd, "  duration_ms: 700\n");
+      const result = await runCli(
+        [
+          "record",
+          "browser-checkout",
+          "--format",
+          "gif",
+          "--run-id",
+          "record-gif-direct-001",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          recorderDoctor: async () => ({
+            screenshot: { available: true, tool: "Playwright", detail: "ok" },
+            video: { available: true, tool: "Playwright", detail: "ok" },
+            gif: { available: true, tool: "ffmpeg", detail: "ok" },
+            cast: { available: true, tool: "asciinema", detail: "ok" },
+          }),
+          gifRecorder: async ({ outputPath, durationMs }) => {
+            assert.equal(durationMs, 700);
+            await writeFile(outputPath, "GIF89a");
+            return {
+              browser: "stub-chromium",
+            };
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /Recorded gif evidence record-gif-direct-001/);
+
+      const runDir = join(cwd, ".samotest/evidence/record-gif-direct-001");
+      const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
+      assert.equal(manifest.artifacts.length, 1);
+      assert.equal(manifest.artifacts[0].type, "gif");
+      assert.equal(await readFile(join(runDir, "artifacts/animation.gif"), "utf8"), "GIF89a");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the final GIF to a scenario recording output path", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-record-gif-output-"));
+
+    try {
+      await writeBrowserScenario(cwd, "  duration_ms: 3500\n  output_path: docs/demo.gif\n");
+      const result = await runCli(
+        [
+          "record",
+          "browser-checkout",
+          "--format",
+          "gif",
+          "--run-id",
+          "record-gif-output-001",
+          "--output",
+          ".samotest/evidence",
+        ],
+        {
+          cwd,
+          gifRecorder: async ({ outputPath, durationMs }) => {
+            assert.equal(durationMs, 3500);
+            await writeFile(outputPath, "GIF89a");
+            return {
+              browser: "stub-chromium",
+            };
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /Copied gif recording to docs\/demo\.gif/);
+      assert.equal(await readFile(join(cwd, "docs/demo.gif"), "utf8"), "GIF89a");
+
+      const runDir = join(cwd, ".samotest/evidence/record-gif-output-001");
+      const manifest = JSON.parse(await readFile(join(runDir, "manifest.json"), "utf8"));
+      assert.equal(manifest.artifacts[0].path, "artifacts/animation.gif");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("falls back to video evidence when GIF conversion is unavailable", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-record-gif-fallback-"));
 
@@ -290,7 +527,7 @@ result:
   });
 });
 
-async function writeBrowserScenario(cwd: string): Promise<void> {
+async function writeBrowserScenario(cwd: string, recordingFields = ""): Promise<void> {
   await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
   await writeFile(
     join(cwd, ".samotest/scenarios/browser-checkout.yaml"),
@@ -301,7 +538,9 @@ priority: required
 target:
   type: browser
   url: "https://example.test/checkout"
-steps:
+recording:
+  mode: browser
+${recordingFields}steps:
   - id: open-checkout
     instruction: "Open checkout."
 result:

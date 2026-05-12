@@ -2,6 +2,8 @@
 
 Manual test scenario runner and evidence gate CLI for reviewer-visible dogfooding.
 
+![samotest demo](docs/demo.gif)
+
 The packaged `samotest` bin is executed with Bun. Use Bun 1.3.13 or newer for local dogfooding, tarball installs, and PR checks.
 
 ## Release Status
@@ -70,7 +72,7 @@ samotest record my-browser-scenario --format gif
 samotest record my-terminal-scenario --format cast
 ```
 
-Browser screenshots and videos use Playwright Chromium. GIF capture records browser video first, then converts it with `ffmpeg`; when `ffmpeg` is unavailable but browser video works, `record --format gif` writes video fallback evidence and says how to install `ffmpeg`. Terminal casts use `asciinema` and fail clearly if it is not installed. Generated screenshot, video, GIF, and cast files are written under `artifacts/` and included in `manifest.json` with sha256 checksums.
+Browser screenshots and videos use Playwright Chromium. GIF capture samples browser frames for `recording.duration_ms` and converts them with `ffmpeg`; when `ffmpeg` is unavailable but browser video works, `record --format gif` writes video fallback evidence and says how to install `ffmpeg`. Terminal casts use `asciinema` and fail clearly if it is not installed. Generated screenshot, video, GIF, and cast files are written under `artifacts/` and included in `manifest.json` with sha256 checksums. Set `recording.output_path` when a docs/demo copy should be refreshed alongside the evidence artifact.
 
 Inspect committed or generated evidence manifests:
 
