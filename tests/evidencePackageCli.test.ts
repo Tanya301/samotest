@@ -8,7 +8,7 @@ import { runCli } from "../src/cli.js";
 describe("samotest evidence package", () => {
   it("creates a portable zip bundle for a run directory", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-package-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);
@@ -16,7 +16,7 @@ describe("samotest evidence package", () => {
       const result = await runCli(["evidence", "package", "run-1", "--format", "zip"], { cwd });
 
       assert.equal(result.exitCode, 0);
-      assert.match(result.stdout, /\.samotest\/evidence\/run-1\/run-1-evidence\.zip/);
+      assert.match(result.stdout, /\.samo\/evidence\/run-1\/run-1-evidence\.zip/);
       assert.equal(result.stderr, "");
 
       const zip = await readFile(join(runDir, "run-1-evidence.zip"));
@@ -29,7 +29,7 @@ describe("samotest evidence package", () => {
 
   it("fails instead of packaging unmanifested artifacts", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-package-unmanifested-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);

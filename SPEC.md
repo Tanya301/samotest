@@ -44,7 +44,7 @@ The first version should focus on reproducible manual test scenarios for local a
 
 ### 1. Create a Scenario
 
-1. A maintainer creates a scenario file under `.samotest/scenarios/`.
+1. A maintainer creates a scenario file under `samo/scenarios/`.
 2. The scenario declares the purpose, prerequisites, commands or manual steps, expected observations, and required evidence types.
 3. The scenario can include optional recording instructions for terminal, browser, or desktop capture.
 4. The scenario is reviewed with the product/spec change before implementation begins.
@@ -55,7 +55,7 @@ The first version should focus on reproducible manual test scenarios for local a
 2. The contributor runs `samotest run <scenario>`.
 3. `samotest` guides the contributor through setup and steps.
 4. The contributor captures required evidence at each checkpoint.
-5. `samotest` writes an evidence bundle under `.samotest/evidence/<run-id>/`.
+5. `samotest` writes an evidence bundle under `.samo/evidence/<run-id>/`.
 6. The contributor attaches or uploads the bundle and references it from the PR/MR.
 
 ### 3. Record a Reproducible Demo
@@ -102,7 +102,7 @@ samotest doctor
 
 ### Command Responsibilities
 
-- `init`: creates `.samotest/` structure and a starter config.
+- `init`: creates the shared `samo/` and `.samo/` structure plus a starter config.
 - `scenario list`: lists scenarios, owners, tags, and required evidence.
 - `scenario validate`: validates scenario syntax and required fields.
 - `run`: starts an interactive guided test run and captures evidence.
@@ -117,10 +117,11 @@ samotest doctor
 ## Repository Layout
 
 ```text
-.samotest/
-  config.yaml
+samo/
   scenarios/
     <scenario-id>.yaml
+.samo/
+  config.yaml
   evidence/
     <run-id>/
       manifest.json
@@ -130,7 +131,7 @@ samotest doctor
     <scenario-id>.tape
 ```
 
-Evidence directories may be ignored by default for large artifacts, while small scenario definitions and reproducible tape files should be committed.
+Visible, human-reviewable project artifacts live under `samo/`. Hidden runtime/config artifacts live under `.samo/`. Evidence directories may be ignored by default for large artifacts, while small scenario definitions and reproducible tape files should be committed.
 
 ## Scenario Format
 
@@ -180,7 +181,7 @@ recording:
   duration_ms: 3500
   output_path: docs/demo.gif
   preferred_formats: ["gif", "video"]
-  tape: ".samotest/tapes/checkout-discount-demo.tape"
+  tape: "samo/tapes/checkout-discount-demo.tape"
 ```
 
 ### Required Scenario Fields
@@ -314,8 +315,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: samotest gate check --manifest .samotest/evidence/latest/manifest.json --base origin/main --head HEAD --format json
-      - run: samotest gate report --manifest .samotest/evidence/latest/manifest.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+      - run: samotest gate check --manifest .samo/evidence/latest/manifest.json --base origin/main --head HEAD --format json
+      - run: samotest gate report --manifest .samo/evidence/latest/manifest.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ## GitLab Integration
@@ -393,7 +394,7 @@ Stable Sprint 1 JSON gate report:
     "base_ref": "main",
     "head_ref": "feature/discount",
     "head_sha": "abc123",
-    "manifest_path": ".samotest/evidence/run-1/manifest.json",
+    "manifest_path": ".samo/evidence/run-1/manifest.json",
     "manifest_url": "https://github.com/Tanya301/samotest/actions/runs/123/artifacts/456",
     "summary": {
       "required": 1,
@@ -495,12 +496,12 @@ Required signoff points:
 
 ## Configuration
 
-`.samotest/config.yaml` should define repository-level policy.
+`.samo/config.yaml` should define repository-level policy.
 
 ```yaml
 schema_version: "0.1"
 evidence:
-  default_output: ".samotest/evidence"
+  default_output: ".samo/evidence"
   commit_artifacts: false
   allowed_formats: ["screenshot", "gif", "video", "cast", "log", "note"]
 gate:
@@ -527,7 +528,7 @@ Sprint 1 should produce a thin vertical slice of the spec-first workflow, not a 
 ### Acceptance Criteria
 
 - Repository contains reviewed `SPEC.md` as the source of product truth.
-- `samotest init` can create `.samotest/config.yaml`, `.samotest/scenarios/`, and `.samotest/evidence/`.
+- `samotest init` can create `.samo/config.yaml`, `samo/scenarios/`, and `.samo/evidence/`.
 - `samotest scenario validate` can validate the required fields for one YAML scenario schema.
 - `samotest run <scenario-id>` can guide a contributor through text-based manual steps and collect notes plus file attachments.
 - Evidence manifest schema `0.1` is generated with run metadata, source revision, observations, artifacts, and checksums.
@@ -562,7 +563,7 @@ Sprint 1 recording expectation:
 
 2. **Add repository initialization**
    - Implement `samotest init`.
-   - Generate starter `.samotest/config.yaml`.
+   - Generate starter `.samo/config.yaml`.
    - Ensure generated evidence directories are ignored when appropriate.
 
 3. **Define scenario schema and validator**

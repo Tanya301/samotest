@@ -27,11 +27,11 @@ describe("samotest CLI", () => {
       const result = await runCli(["init"], { cwd });
 
       assert.equal(result.exitCode, 0);
-      assert.match(result.stdout, /Initialized \.samotest/);
-      assert.equal((await stat(join(cwd, ".samotest/config.yaml"))).isFile(), true);
-      assert.equal((await stat(join(cwd, ".samotest/scenarios"))).isDirectory(), true);
-      assert.equal((await stat(join(cwd, ".samotest/evidence"))).isDirectory(), true);
-      assert.match(await readFile(join(cwd, ".gitignore"), "utf8"), /\.samotest\/evidence\//);
+      assert.match(result.stdout, /Initialized samo\/ and \.samo\//);
+      assert.equal((await stat(join(cwd, ".samo/config.yaml"))).isFile(), true);
+      assert.equal((await stat(join(cwd, "samo/scenarios"))).isDirectory(), true);
+      assert.equal((await stat(join(cwd, ".samo/evidence"))).isDirectory(), true);
+      assert.match(await readFile(join(cwd, ".gitignore"), "utf8"), /\.samo\/evidence\//);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -69,12 +69,12 @@ describe("samotest CLI", () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
     try {
-      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
       await mkdir(join(cwd, "artifacts"), { recursive: true });
       await writeFile(join(cwd, "artifacts/open-cart.png"), "fake screenshot");
       await writeFile(join(cwd, "artifacts/apply-code.log"), "fake log");
       await writeFile(
-        join(cwd, ".samotest/scenarios/checkout-discount-demo.yaml"),
+        join(cwd, "samo/scenarios/checkout-discount-demo.yaml"),
         `id: checkout-discount-demo
 title: Checkout discount manual demo
 owner: "@team-web"
@@ -102,7 +102,7 @@ result:
           "run-001",
           "--non-interactive",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -124,7 +124,7 @@ result:
       assert.match(result.stdout, /Recorded run run-001/);
 
       const run = JSON.parse(
-        await readFile(join(cwd, ".samotest/evidence/run-001/run.json"), "utf8"),
+        await readFile(join(cwd, ".samo/evidence/run-001/run.json"), "utf8"),
       );
       assert.equal(run.scenario.id, "checkout-discount-demo");
       assert.equal(run.notes[0], "observed in Chrome");
@@ -143,11 +143,11 @@ result:
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
     try {
-      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
       await mkdir(join(cwd, "artifacts"), { recursive: true });
       await writeFile(join(cwd, "artifacts/open-cart.png"), "fake screenshot");
       await writeFile(
-        join(cwd, ".samotest/scenarios/checkout-discount-demo.yaml"),
+        join(cwd, "samo/scenarios/checkout-discount-demo.yaml"),
         `id: checkout-discount-demo
 title: Checkout discount manual demo
 owner: "@team-web"
@@ -168,7 +168,7 @@ result:
           "--run-id",
           "run-default",
           "--output",
-          ".samotest/evidence",
+          ".samo/evidence",
         ],
         {
           cwd,
@@ -183,7 +183,7 @@ result:
       assert.match(result.stdout, /Recorded run run-default/);
 
       const run = JSON.parse(
-        await readFile(join(cwd, ".samotest/evidence/run-default/run.json"), "utf8"),
+        await readFile(join(cwd, ".samo/evidence/run-default/run.json"), "utf8"),
       );
       assert.equal(run.metadata.non_interactive, false);
       assert.equal(run.notes[0], "smoke");
@@ -198,9 +198,9 @@ result:
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
     try {
-      await mkdir(join(cwd, ".samotest/scenarios"), { recursive: true });
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
       await writeFile(
-        join(cwd, ".samotest/scenarios/no-waive.yaml"),
+        join(cwd, "samo/scenarios/no-waive.yaml"),
         `id: no-waive
 title: No waive scenario
 owner: "@team-web"

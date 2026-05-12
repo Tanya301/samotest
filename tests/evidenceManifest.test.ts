@@ -9,7 +9,7 @@ import { inspectEvidence, writeEvidenceManifest } from "../src/evidence.js";
 describe("evidence manifest schema and artifacts", () => {
   it("writes schema 0.1 manifests with relative artifact paths and sha256 checksums", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-evidence-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const artifactPath = join(runDir, "artifacts/terminal.log");
 
     try {
@@ -79,7 +79,7 @@ describe("evidence manifest schema and artifacts", () => {
 
   it("reports checksum failures when inspecting a manifest", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-evidence-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
     const artifactPath = join(runDir, "artifacts/terminal.log");
 
     try {

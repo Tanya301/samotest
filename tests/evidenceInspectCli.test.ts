@@ -8,7 +8,7 @@ import { runCli } from "../src/cli.js";
 describe("samotest evidence inspect", () => {
   it("prints human-readable evidence summaries by default", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-inspect-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);
@@ -31,7 +31,7 @@ describe("samotest evidence inspect", () => {
 
   it("prints machine-readable JSON with --format json", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-inspect-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);
@@ -53,7 +53,7 @@ describe("samotest evidence inspect", () => {
 
   it("resolves bare run ids from the default evidence directory", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-inspect-"));
-    const runDir = join(cwd, ".samotest/evidence/run-1");
+    const runDir = join(cwd, ".samo/evidence/run-1");
 
     try {
       await writeEvidenceFixture(runDir);

@@ -338,7 +338,7 @@ async function resolveManifestPath(inputPath: string, cwd: string): Promise<stri
   }
 
   if (isBareRunId(inputPath)) {
-    return resolve(cwd, ".samotest/evidence", inputPath, "manifest.json");
+    return resolve(cwd, ".samo/evidence", inputPath, "manifest.json");
   }
 
   return join(absolutePath, "manifest.json");
