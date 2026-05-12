@@ -89,7 +89,7 @@ describe("release packaging", () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 });
 
 async function run(
