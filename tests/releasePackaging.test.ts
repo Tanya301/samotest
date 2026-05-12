@@ -14,7 +14,7 @@ describe("release packaging", () => {
     const packageJson = await readJson("package.json");
 
     assert.equal(packageJson.name, "samotest");
-    assert.equal(packageJson.version, "0.2.0");
+    assert.equal(packageJson.version, "0.2.1");
     assert.equal(packageJson.license, "Apache-2.0");
     assert.equal(packageJson.packageManager, "bun@1.3.13");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
@@ -39,7 +39,7 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /v0\.2\.0 is ready for early real use/);
+    assert.match(readme, /v0\.2\.1 is ready for early real use/);
     assert.doesNotMatch(readme, /0\.1\.0/);
     assert.doesNotMatch(readme, /scenario validate is not implemented yet/);
     assert.match(readme, /samotest doctor/);
