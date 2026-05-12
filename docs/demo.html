@@ -1,55 +1,18 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>samotest real demo</title>
-    <style>
-      body { margin: 0; background: #0f172a; color: #f8fafc; font-family: Inter, system-ui, sans-serif; }
-      main { min-height: 100vh; display: grid; place-items: center; padding: 28px; }
-      .demo { width: min(960px, 100%); display: grid; gap: 16px; }
-      h1 { margin: 0; font-size: 38px; letter-spacing: 0; }
-      p { margin: 0; color: #cbd5e1; font-size: 16px; }
-      .terminal { height: 540px; overflow: hidden; border: 1px solid #334155; border-radius: 16px; background: #020617; box-shadow: 0 24px 70px #0008; }
-      .bar { height: 34px; background: #111827; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 7px; padding-left: 14px; }
-      .bar i { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; }
-      .bar i:nth-child(2) { background: #f59e0b; }
-      .bar i:nth-child(3) { background: #22c55e; }
-      pre { margin: 0; padding: 20px; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; color: #dbeafe; animation: scroll 8s linear infinite; }
-      .caption { color: #94a3b8; font-size: 13px; }
-      @keyframes scroll { 0%, 15% { transform: translateY(0); } 85%, 100% { transform: translateY(-42%); } }
-    </style>
-  </head>
-  <body>
-    <main>
-      <section class="demo">
-        <h1>samotest</h1>
-        <p>Actual CLI scenario/evidence command output.</p>
-        <div class="terminal"><div class="bar"><i></i><i></i><i></i></div><pre>$ bun dist/cli.js --help
-Usage: samotest &lt;command&gt; [options]
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>samotest demo</title><style>
+body{margin:0;background:#111827;color:#f8fafc;font-family:Inter,system-ui,sans-serif}main{min-height:100vh;display:grid;place-items:center;padding:28px}.wrap{width:min(1000px,100%);display:grid;gap:16px}h1{font-size:38px;margin:0}.sub{margin:0;color:#cbd5e1}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:#020617;border:1px solid #334155;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px #0008}.bar{height:34px;background:#111827;border-bottom:1px solid #334155;display:flex;gap:7px;align-items:center;padding-left:14px}.bar i{width:10px;height:10px;border-radius:50%;background:#ef4444}.bar i:nth-child(2){background:#f59e0b}.bar i:nth-child(3){background:#22c55e}pre{margin:0;padding:18px;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;color:#dbeafe}.evidence{background:#f8fafc;color:#111827;padding:20px}.card{border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0;background:white}.ok{color:#15803d;font-weight:800}.artifact{height:120px;border-radius:10px;background:linear-gradient(135deg,#fed7aa,#f8fafc);display:grid;place-items:center;color:#431407;font-weight:800;animation:pulse 3s infinite}.flow{display:grid;gap:8px}.step{background:#1e293b;border:1px solid #475569;border-radius:10px;padding:10px;color:#dbeafe}.step:nth-child(2){animation:hi 4s infinite .8s}.step:nth-child(3){animation:hi 4s infinite 1.6s}.step:nth-child(4){animation:hi 4s infinite 2.4s}@keyframes hi{30%,55%{border-color:#f97316;background:#431407}}@keyframes pulse{50%{transform:scale(1.03)}}
+</style></head><body><main><section class="wrap"><h1>samotest records review evidence</h1><p class="sub">A real evidence workflow: record a browser scenario, copy the GIF artifact, inspect the manifest, then hand the result to the review gate.</p><div class="grid"><div class="panel"><div class="bar"><i></i><i></i><i></i></div><pre>$ samotest record readme-demo --format gif
+Recorded gif evidence readme-demo
+Copied gif recording to docs/demo.gif
 
-Manual testing and evidence capture CLI.
+$ samotest evidence inspect .samotest/evidence/readme-demo
+Evidence run readme-demo
+Scenario: readme-demo
+Status: passed
+Artifacts: 1
+  - gif readme-demo-gif artifacts/animation.gif
+Observations: 1
+  - capture passed after waiting 3500ms
 
-Reviewed Sprint 1 commands:
-  samotest init
-  samotest scenario list
-  samotest scenario validate [path]
-  samotest run &lt;scenario-id&gt; [--profile &lt;name&gt;] [--output &lt;dir&gt;] [--pr &lt;id&gt;] [--mr &lt;id&gt;]
-  samotest record &lt;scenario-id&gt; [--format screenshot|gif|video|cast] [--output &lt;dir&gt;]
-  samotest evidence inspect &lt;run-id-or-path&gt;
-  samotest evidence package &lt;run-id-or-path&gt; [--format dir|zip]
-  samotest evidence upload &lt;run-id-or-path&gt; [--provider github|gitlab]
-  samotest gate check --manifest &lt;path&gt; [--base &lt;ref&gt;] [--head &lt;ref&gt;] [--format text|json]
-  samotest gate report --manifest &lt;path&gt; [--format text|json|markdown]
-  samotest doctor
-
-$ bun dist/cli.js scenario validate .samotest/scenarios/readme-demo.yaml
-Valid scenario: readme-demo (.samotest/scenarios/readme-demo.yaml)
-
-$ bun dist/cli.js evidence inspect .samotest/evidence/readme-demo
-</pre></div>
-        <div class="caption">Recorded by samotest from real command output captured in this repository.</div>
-      </section>
-    </main>
-  </body>
-</html>
+$ samotest gate report --manifest .samotest/evidence/readme-demo/manifest.json
+Manual testing gate: pass</pre></div><div class="panel evidence"><div class="flow"><div class="step">1. Scenario opens target page</div><div class="step">2. Playwright captures frames</div><div class="step">3. GIF + manifest are written</div><div class="step">4. Gate report is ready for PR review</div></div><div class="card"><div class="artifact">docs/demo.gif</div></div><div class="card"><span class="ok">PASS</span> manifest includes artifact checksum and observation</div></div></div></section></main></body></html>
