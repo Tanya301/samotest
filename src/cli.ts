@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { platform, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
@@ -26,6 +26,7 @@ export interface RunCliOptions {
   recorderDoctor?: () => Promise<RecorderDoctorResult>;
   screenshotRecorder?: ScreenshotRecorder;
   videoRecorder?: VideoRecorder;
+  gifRecorder?: VideoRecorder;
   gifConverter?: GifConverter;
   castRecorder?: CastRecorder;
   now?: () => Date;
@@ -58,6 +59,7 @@ export type ScreenshotRecorder = (input: ScreenshotRecorderInput) => Promise<Scr
 export interface VideoRecorderInput {
   url: string;
   outputPath: string;
+  durationMs?: number;
 }
 
 export interface VideoRecorderResult {
@@ -598,7 +600,7 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
 
   const needsDoctor =
     (parsed.format === "screenshot" && !options.screenshotRecorder) ||
-    ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder) ||
+    ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder && !options.gifRecorder) ||
     (parsed.format === "gif" && !options.gifConverter);
   const doctor = needsDoctor
     ? options.recorderDoctor
@@ -614,7 +616,7 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     };
   }
 
-  if ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder && !doctor?.video.available) {
+  if ((parsed.format === "video" || parsed.format === "gif") && !options.videoRecorder && !options.gifRecorder && !doctor?.video.available) {
     return {
       exitCode: 2,
       stdout: "",
@@ -623,6 +625,7 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
   }
 
   const now = options.now ? options.now() : new Date();
+  const recordingDurationMs = browserRecordingDurationMs(loaded.scenario);
   const runId = parsed.runId ?? `record-${now.toISOString().replace(/[:.]/g, "-")}`;
   const outputRoot = isAbsolute(parsed.output) ? parsed.output : join(cwd, parsed.output);
   const runDir = join(outputRoot, runId);
@@ -633,7 +636,8 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
   const artifacts: Array<{ type: string; name: string; path: string }> = [];
   let browser = "playwright";
   let stdoutPrefix = `Recorded ${parsed.format} evidence ${runId}`;
-  let note = `Captured browser ${parsed.format} for ${url}.`;
+  let note = `Captured browser ${parsed.format} for ${url}${recordingDurationMs ? ` after waiting ${recordingDurationMs}ms before close` : ""}.`;
+  let copiedRecordingPath: string | undefined;
 
   if (parsed.format === "screenshot") {
     const screenshotPath = join(artifactsDir, "screenshot.png");
@@ -656,12 +660,32 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     });
   }
 
-  if (parsed.format === "video" || parsed.format === "gif") {
+  if (parsed.format === "gif" && !options.videoRecorder && !options.gifConverter && (options.gifRecorder || doctor?.gif.available)) {
+    const gifPath = join(artifactsDir, "animation.gif");
+    const recorder = options.gifRecorder ?? recordGifFramesWithPlaywright;
+    let recorderResult: VideoRecorderResult;
+    try {
+      recorderResult = await recorder({ url, outputPath: gifPath, durationMs: recordingDurationMs });
+    } catch (error) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `GIF recorder failed: ${formatError(error)}\n`,
+      };
+    }
+    browser = recorderResult.browser ?? "chromium";
+    artifacts.push({
+      type: "gif",
+      name: `${loaded.scenario.id}-gif`,
+      path: gifPath,
+    });
+    stdoutPrefix = `Recorded gif evidence ${runId}`;
+  } else if (parsed.format === "video" || parsed.format === "gif") {
     const videoPath = join(artifactsDir, "video.webm");
     const recorder = options.videoRecorder ?? recordVideoWithPlaywright;
     let recorderResult: VideoRecorderResult;
     try {
-      recorderResult = await recorder({ url, outputPath: videoPath });
+      recorderResult = await recorder({ url, outputPath: videoPath, durationMs: recordingDurationMs });
     } catch (error) {
       return {
         exitCode: 2,
@@ -679,7 +703,7 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
     if (parsed.format === "gif") {
       if (!options.gifConverter && !doctor?.gif.available) {
         stdoutPrefix = `GIF conversion unavailable: ${doctor?.gif.detail ?? "ffmpeg is unavailable."}\nRecorded video fallback evidence ${runId}`;
-        note = `Captured browser video fallback for ${url}; GIF conversion was unavailable.`;
+        note = `Captured browser video fallback for ${url}${recordingDurationMs ? ` after waiting ${recordingDurationMs}ms before close` : ""}; GIF conversion was unavailable.`;
       } else {
         const gifPath = join(artifactsDir, "animation.gif");
         const converter = options.gifConverter ?? convertVideoToGifWithFfmpeg;
@@ -700,6 +724,23 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
         stdoutPrefix = `Recorded gif evidence ${runId}`;
       }
     }
+  }
+
+  const recordingOutputPath = browserRecordingOutputPath(loaded.scenario);
+  const publishArtifact = [...artifacts].reverse().find((artifact) => artifact.type === parsed.format);
+  if (recordingOutputPath && publishArtifact) {
+    const destination = isAbsolute(recordingOutputPath) ? recordingOutputPath : join(cwd, recordingOutputPath);
+    try {
+      await mkdir(dirname(destination), { recursive: true });
+      await copyFile(publishArtifact.path, destination);
+    } catch (error) {
+      return {
+        exitCode: 2,
+        stdout: "",
+        stderr: `Recording output copy failed: ${formatError(error)}\n`,
+      };
+    }
+    copiedRecordingPath = isAbsolute(recordingOutputPath) ? recordingOutputPath : recordingOutputPath;
   }
 
   const finishedAt = (options.now ? options.now() : new Date()).toISOString();
@@ -734,7 +775,7 @@ async function runRecord(args: string[], options: RunCliOptions): Promise<CliRes
 
   return {
     exitCode: 0,
-    stdout: `${stdoutPrefix} at ${join(parsed.output, runId, "manifest.json")}\n`,
+    stdout: `${stdoutPrefix} at ${join(parsed.output, runId, "manifest.json")}\n${copiedRecordingPath ? `Copied ${parsed.format} recording to ${copiedRecordingPath}\n` : ""}`,
     stderr: "",
   };
 }
@@ -2146,6 +2187,9 @@ async function recordVideoWithPlaywright(input: VideoRecorderInput): Promise<Vid
     });
     const page = await context.newPage();
     await page.goto(input.url, { waitUntil: "networkidle", timeout: 30_000 });
+    if (input.durationMs && input.durationMs > 0) {
+      await page.waitForTimeout(input.durationMs);
+    }
     const video = page.video();
     await context.close();
     const recordedPath = await video?.path();
@@ -2172,8 +2216,94 @@ async function recordVideoWithPlaywright(input: VideoRecorderInput): Promise<Vid
   };
 }
 
+async function recordGifFramesWithPlaywright(input: VideoRecorderInput): Promise<VideoRecorderResult> {
+  const framesDir = await mkdtemp(join(tmpdir(), "samotest-gif-frames-"));
+  const frameIntervalMs = 250;
+  const durationMs = Math.max(input.durationMs ?? 1_000, frameIntervalMs);
+  const frameCount = Math.max(2, Math.ceil(durationMs / frameIntervalMs));
+
+  try {
+    if (isBunRuntime()) {
+      await recordGifFramesWithNodePlaywright(input.url, framesDir, frameIntervalMs, frameCount);
+    } else {
+      await recordGifFramesInProcess(input.url, framesDir, frameIntervalMs, frameCount);
+    }
+    await runProcess("ffmpeg", [
+      "-y",
+      "-framerate",
+      String(1000 / frameIntervalMs),
+      "-i",
+      join(framesDir, "frame-%04d.png"),
+      "-vf",
+      "fps=12,scale=960:-1:flags=lanczos",
+      input.outputPath,
+    ]);
+  } finally {
+    await rm(framesDir, { recursive: true, force: true });
+  }
+
+  return {
+    browser: "chromium",
+  };
+}
+
+async function recordGifFramesInProcess(url: string, framesDir: string, frameIntervalMs: number, frameCount: number): Promise<void> {
+  const playwright = await importOptionalPackage("playwright");
+  const browser = await playwright.chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+    for (let frame = 0; frame < frameCount; frame += 1) {
+      await page.screenshot({ path: join(framesDir, `frame-${String(frame).padStart(4, "0")}.png`) });
+      if (frame < frameCount - 1) {
+        await page.waitForTimeout(frameIntervalMs);
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+async function recordGifFramesWithNodePlaywright(
+  url: string,
+  framesDir: string,
+  frameIntervalMs: number,
+  frameCount: number,
+): Promise<void> {
+  const scriptPath = join(framesDir, "capture-frames.mjs");
+  await writeFile(
+    scriptPath,
+    `import { createRequire } from "node:module";
+import { join } from "node:path";
+
+const [url, framesDir, frameIntervalMsRaw, frameCountRaw, requirePath] = process.argv.slice(2);
+const require = createRequire(requirePath);
+const playwright = require("playwright");
+const frameIntervalMs = Number(frameIntervalMsRaw);
+const frameCount = Number(frameCountRaw);
+const browser = await playwright.chromium.launch({ headless: true });
+
+try {
+  const page = await browser.newPage();
+  await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    await page.screenshot({ path: join(framesDir, \`frame-\${String(frame).padStart(4, "0")}.png\`) });
+    if (frame < frameCount - 1) {
+      await page.waitForTimeout(frameIntervalMs);
+    }
+  }
+} finally {
+  await browser.close();
+}
+`,
+    "utf8",
+  );
+  await runProcess("node", [scriptPath, url, framesDir, String(frameIntervalMs), String(frameCount), fileURLToPath(import.meta.url)]);
+}
+
 async function convertVideoToGifWithFfmpeg(input: GifConverterInput): Promise<void> {
-  await execFileAsync("ffmpeg", [
+  await runProcess("ffmpeg", [
     "-y",
     "-i",
     input.videoPath,
@@ -2181,6 +2311,121 @@ async function convertVideoToGifWithFfmpeg(input: GifConverterInput): Promise<vo
     "fps=12,scale=960:-1:flags=lanczos",
     input.outputPath,
   ]);
+}
+
+async function runProcess(command: string, args: string[], options: { cwd?: string } = {}): Promise<void> {
+  if (await runBunProcess(command, args, options)) {
+    return;
+  }
+
+  await runNodeProcess(command, args, options);
+}
+
+async function runBunProcess(command: string, args: string[], options: { cwd?: string }): Promise<boolean> {
+  const bun = bunRuntime();
+  if (typeof bun?.spawn !== "function") {
+    return false;
+  }
+
+  const runDir = await mkdtemp(join(tmpdir(), "samotest-process-"));
+  const statusPath = join(runDir, "status");
+  const stderrPath = join(runDir, "stderr.log");
+  const shellCommand = [
+    `${shellQuote(command)} ${args.map(shellQuote).join(" ")} > /dev/null 2> ${shellQuote(stderrPath)}`,
+    "status=$?",
+    `printf '%s' "$status" > ${shellQuote(statusPath)}`,
+  ].join("; ");
+
+  let child: unknown;
+  try {
+    child = bun.spawn(["sh", "-c", shellCommand], {
+      cwd: options.cwd,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: process.env,
+      detached: true,
+    });
+  } catch (error) {
+    await rm(runDir, { recursive: true, force: true });
+    throw new Error(`${command} failed to start: ${formatError(error)}`);
+  }
+
+  (child as { unref?: () => void }).unref?.();
+
+  try {
+    const codeText = await waitForFileText(statusPath, 120_000);
+    const stderr = await readFile(stderrPath, "utf8").catch(() => "");
+    const code = Number(codeText.trim());
+    if (code === 0) {
+      return true;
+    }
+
+    const reason = `exit code ${Number.isFinite(code) ? code : "unknown"}`;
+    const detail = stderr.trim() ? `: ${stderr.trim()}` : "";
+    throw new Error(`${command} failed with ${reason}${detail}`);
+  } finally {
+    await rm(runDir, { recursive: true, force: true });
+  }
+}
+
+async function runNodeProcess(command: string, args: string[], options: { cwd?: string }): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const reason = signal ? `signal ${signal}` : `exit code ${code ?? "unknown"}`;
+      const detail = stderr.trim() ? `: ${stderr.trim()}` : "";
+      reject(new Error(`${command} failed with ${reason}${detail}`));
+    });
+  });
+}
+
+async function waitForFileText(path: string, timeoutMs: number): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (!isErrnoException(error) || error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+    await delay(100);
+  }
+  throw new Error(`Timed out waiting for process completion after ${timeoutMs}ms`);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isBunRuntime(): boolean {
+  return typeof bunRuntime()?.spawn === "function";
+}
+
+function bunRuntime(): { spawn?: (args: string[], options?: Record<string, unknown>) => unknown } | undefined {
+  return (globalThis as typeof globalThis & { Bun?: { spawn?: (args: string[], options?: Record<string, unknown>) => unknown } }).Bun;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 async function recordCastWithAsciinema(input: CastRecorderInput): Promise<CastRecorderResult> {
@@ -2263,6 +2508,32 @@ function firstStepId(scenario: ScenarioDefinition): string | undefined {
   return scenario.steps[0]?.id ?? "screenshot";
 }
 
+function browserRecordingDurationMs(scenario: ScenarioDefinition): number | undefined {
+  if (!isRecord(scenario.recording)) {
+    return undefined;
+  }
+
+  return (
+    numberValue(scenario.recording.duration_ms) ??
+    numberValue(scenario.recording.durationMs) ??
+    numberValue(scenario.recording.wait_before_close_ms) ??
+    numberValue(scenario.recording.waitBeforeCloseMs) ??
+    numberValue(scenario.recording.wait_ms) ??
+    numberValue(scenario.recording.waitMs)
+  );
+}
+
+function browserRecordingOutputPath(scenario: ScenarioDefinition): string | undefined {
+  if (!isRecord(scenario.recording)) {
+    return undefined;
+  }
+
+  return (
+    stringValue(scenario.recording.output_path) ??
+    stringValue(scenario.recording.outputPath)
+  ) ?? undefined;
+}
+
 function isHttpUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//.test(value);
 }
@@ -2278,6 +2549,17 @@ function stringValue(value: unknown): string | null {
 function stringRecordValue(record: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = record?.[key];
   return isNonEmptyString(value) ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
