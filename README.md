@@ -62,6 +62,21 @@ screenshot path/to/screenshot.png
 log path/to/output.log
 ```
 
+Run unattended (no stdin prompts) and let samotest invoke the configured recorders
+for steps that declare `record: screenshot|video|gif|cast`:
+
+```sh
+samotest run my-scenario --non-interactive
+```
+
+Run several scenarios in one invocation; each one gets its own subdirectory under
+the shared `<runId>/` and an aggregate `manifest.json` is written alongside:
+
+```sh
+samotest run scenario-a scenario-b --non-interactive
+samotest run --all --non-interactive
+```
+
 Generate native recorder evidence when local dependencies are available:
 
 ```sh

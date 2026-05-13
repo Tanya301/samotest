@@ -647,10 +647,21 @@ function malformed(message: string): GateError {
 function formatArtifactLink(artifact: EvidenceArtifact): string {
   const label = escapeTableCell(artifact.name || artifact.path);
   if (isNonEmptyString(artifact.url)) {
+    if (isInlineImageArtifact(artifact)) {
+      return `![${label}](${artifact.url})`;
+    }
     return `[${label}](${artifact.url})`;
   }
 
   return escapeTableCell(artifact.path);
+}
+
+function isInlineImageArtifact(artifact: EvidenceArtifact): boolean {
+  if (artifact.type === "screenshot" || artifact.type === "gif") {
+    return true;
+  }
+  const ext = (artifact.path || "").toLowerCase().split(".").pop() ?? "";
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext);
 }
 
 function reportHasReviewGaps(report: GateReport): boolean {

@@ -336,14 +336,113 @@ describe("samotest evidence upload", () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it("embeds screenshot artifacts inline in GitLab evidence comments", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-upload-img-"));
+    const runDir = join(cwd, ".samo/evidence/run-1");
+    const requests: Array<{ url: string; method: string; body?: unknown }> = [];
+    const originalFetch = globalThis.fetch;
+    const { createHash } = await import("node:crypto");
+    const screenshotBytes = "fake png bytes\n";
+    const screenshotSha = createHash("sha256").update(screenshotBytes).digest("hex");
+
+    try {
+      await writeEvidenceFixture(runDir, {
+        review: { provider: "gitlab", mr: "25" },
+        extraArtifactFiles: [{ path: "artifacts/checkout.png", content: screenshotBytes }],
+        extraArtifacts: [
+          {
+            type: "screenshot",
+            name: "checkout-screenshot",
+            path: "artifacts/checkout.png",
+            sha256: screenshotSha,
+          },
+        ],
+      });
+      process.env.GITLAB_TOKEN = "test-token";
+      process.env.GITLAB_URL = "https://gitlab.example.test";
+
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({ url, method: init?.method ?? "GET", body: init?.body });
+
+        if (url.endsWith("/uploads")) {
+          const count = requests.filter((request) => request.url.endsWith("/uploads")).length;
+          if (count === 1) {
+            return jsonResponse(201, {
+              markdown: "[terminal-output](/uploads/terminal.log)",
+              url: "/uploads/terminal.log",
+              full_path: "/uploads/terminal.log",
+            });
+          }
+          if (count === 2) {
+            return jsonResponse(201, {
+              markdown: "![checkout](/uploads/checkout.png)",
+              url: "/uploads/checkout.png",
+              full_path: "/uploads/checkout.png",
+            });
+          }
+          return jsonResponse(201, {
+            markdown: "[manifest](/uploads/manifest.json)",
+            url: "/uploads/manifest.json",
+            full_path: "/uploads/manifest.json",
+          });
+        }
+
+        if (url.endsWith("/merge_requests/25/notes")) {
+          return jsonResponse(201, { id: 456 });
+        }
+        if (url.endsWith("/merge_requests/25/notes/456")) {
+          return jsonResponse(200, { id: 456 });
+        }
+        return jsonResponse(404, { message: "unexpected request" });
+      }) as typeof fetch;
+
+      const result = await runCli(
+        [
+          "evidence",
+          "upload",
+          "run-1",
+          "--provider",
+          "gitlab",
+          "--repo",
+          "NikolayS/samo.team",
+          "--mr",
+          "25",
+        ],
+        { cwd, resolveArtifactUrl: async () => true },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      const noteUpdate = requests.find((request) => request.url.endsWith("/merge_requests/25/notes/456"));
+      assert.ok(noteUpdate);
+      const posted = JSON.parse(String(noteUpdate.body)) as { body: string };
+      assert.match(
+        posted.body,
+        /!\[artifacts\/checkout\.png\]\(https:\/\/gitlab\.example\.test\/uploads\/checkout\.png\)/,
+        `body should embed screenshot inline: ${posted.body}`,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 async function writeEvidenceFixture(
   runDir: string,
-  overrides: { review?: Record<string, unknown>; artifactUrl?: string } = {},
+  overrides: {
+    review?: Record<string, unknown>;
+    artifactUrl?: string;
+    extraArtifacts?: Array<Record<string, unknown>>;
+    extraArtifactFiles?: Array<{ path: string; content: string }>;
+  } = {},
 ): Promise<void> {
   await mkdir(join(runDir, "artifacts"), { recursive: true });
   await writeFile(join(runDir, "artifacts/terminal.log"), "checkout flow passed\n", "utf8");
+  for (const file of overrides.extraArtifactFiles ?? []) {
+    await writeFile(join(runDir, file.path), file.content, "utf8");
+  }
   await writeFile(
     join(runDir, "manifest.json"),
     `${JSON.stringify(
@@ -374,6 +473,7 @@ async function writeEvidenceFixture(
             sha256: "f218352f6ba206ce8fbfdf42b7cca44c67b47584403c5573d703b716d54abcb6",
             ...(overrides.artifactUrl ? { url: overrides.artifactUrl } : {}),
           },
+          ...(overrides.extraArtifacts ?? []),
         ],
         review: {
           command: "bun run test:e2e -- --grep checkout",
