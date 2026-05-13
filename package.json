@@ -1,6 +1,6 @@
 {
   "name": "samotest",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Manual test scenario runner and evidence gate CLI.",
   "type": "module",
   "packageManager": "bun@1.3.13",

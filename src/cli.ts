@@ -91,7 +91,7 @@ const sprintCommands = [
   "samotest init",
   "samotest scenario list",
   "samotest scenario validate [path]",
-  "samotest run <scenario-id> [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]",
+  "samotest run <scenario-id...> [--all] [--non-interactive] [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]",
   "samotest record <scenario-id> [--format screenshot|gif|video|cast] [--output <dir>]",
   "samotest evidence inspect <run-id-or-path>",
   "samotest evidence package <run-id-or-path> [--format dir|zip]",
@@ -164,13 +164,14 @@ interface ProviderEvidenceSummary {
 }
 
 interface RunCommandArgs {
-  scenarioId?: string;
+  scenarioIds: string[];
   output: string;
   runId?: string;
   profile?: string;
   pr?: string;
   mr?: string;
   nonInteractive: boolean;
+  all: boolean;
 }
 
 interface RecordCommandArgs {
@@ -202,7 +203,7 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
   }
 
   if (command === "--version" || command === "-V") {
-    return { exitCode: 0, stdout: "0.2.0\n", stderr: "" };
+    return { exitCode: 0, stdout: "0.2.2\n", stderr: "" };
   }
 
   if (command === "init") {
@@ -257,7 +258,31 @@ async function runScenario(args: string[], options: RunCliOptions): Promise<CliR
   const cwd = options.cwd ?? process.cwd();
   const parsed = parseRunArgs(args);
 
-  if (!parsed.scenarioId) {
+  let scenarioIds = parsed.scenarioIds;
+  if (parsed.all) {
+    const discovered = await findDefaultScenarioFiles(cwd);
+    const allIds: string[] = [];
+    for (const file of discovered) {
+      try {
+        const validation = await validateScenarioFile(file.absolutePath);
+        if (validation.valid) {
+          allIds.push(validation.scenario.id);
+        }
+      } catch {
+        // skip unreadable scenario files; loadScenario below would surface them
+      }
+    }
+    if (allIds.length === 0) {
+      return {
+        exitCode: 3,
+        stdout: "",
+        stderr: "No scenarios found under samo/scenarios for --all\n",
+      };
+    }
+    scenarioIds = scenarioIds.length > 0 ? scenarioIds : allIds;
+  }
+
+  if (scenarioIds.length === 0) {
     return {
       exitCode: 3,
       stdout: "",
@@ -265,120 +290,381 @@ async function runScenario(args: string[], options: RunCliOptions): Promise<CliR
     };
   }
 
-  const loaded = await loadScenario(cwd, parsed.scenarioId);
-  if (!loaded.ok) {
-    return {
-      exitCode: loaded.exitCode,
-      stdout: "",
-      stderr: loaded.error,
-    };
-  }
-
-  const input = options.stdin ?? await readAvailableStdin();
+  const input = options.stdin ?? (parsed.nonInteractive ? "" : await readAvailableStdin());
   const lines = new ScriptedInput(input);
-  const stdout: string[] = [];
-  const now = new Date().toISOString();
-  const runId = parsed.runId ?? `run-${now.replace(/[:.]/g, "-")}`;
-
-  stdout.push(`samotest run ${loaded.scenario.id}`);
-  stdout.push(`Scenario: ${loaded.scenario.title}`);
-
-  const prerequisites = toStringList(loaded.scenario.prerequisites);
-  if (prerequisites.length > 0) {
-    stdout.push("Prerequisites:");
-    prerequisites.forEach((prerequisite, index) => stdout.push(`  ${index + 1}. ${prerequisite}`));
-  }
-
-  stdout.push("Run note (optional):");
-  const runNotes = parseNotes(lines.next(), "run note:");
-  const stepResults = [];
-
-  for (const [index, step] of loaded.scenario.steps.entries()) {
-    const stepId = step.id ?? `step-${index + 1}`;
-    stdout.push(`Step ${index + 1}: ${stepId}`);
-    if (step.instruction) {
-      stdout.push(`Instruction: ${step.instruction}`);
-    }
-    if (step.expected) {
-      stdout.push(`Expected: ${step.expected}`);
-    }
-    stdout.push("Status [passed|failed|blocked|skipped|waived]:");
-
-    const rawStatus = lines.next().trim().toLowerCase();
-    if (!stepStatuses.has(rawStatus as StepStatus)) {
-      return {
-        exitCode: 3,
-        stdout: stdout.join("\n") + "\n",
-        stderr: `Invalid status for step ${stepId}: ${rawStatus || "<empty>"}\n`,
-      };
-    }
-
-    const status = rawStatus as StepStatus;
-    if (status === "waived" && !allowsWaive(step)) {
-      return {
-        exitCode: 3,
-        stdout: stdout.join("\n") + "\n",
-        stderr: `Step ${stepId} does not allow waived status\n`,
-      };
-    }
-
-    stdout.push("Step note (optional):");
-    const notes = parseNotes(lines.next(), "step note:");
-    stdout.push("Attachments, one per line; blank line to continue:");
-    const attachmentsResult = await readAttachments(lines, cwd);
-    if (!attachmentsResult.ok) {
-      return {
-        exitCode: 3,
-        stdout: stdout.join("\n") + "\n",
-        stderr: attachmentsResult.error,
-      };
-    }
-
-    stepResults.push({
-      id: stepId,
-      instruction: step.instruction,
-      expected: step.expected,
-      status,
-      notes,
-      attachments: attachmentsResult.attachments,
-    });
-  }
-
-  const run = {
-    schema_version: "0.1",
-    run_id: runId,
-    scenario: {
-      id: loaded.scenario.id,
-      title: loaded.scenario.title,
-      owner: loaded.scenario.owner,
-      priority: loaded.scenario.priority,
-      path: loaded.path,
-    },
-    status: summarizeRunStatus(stepResults.map((step) => step.status)),
-    started_at: now,
-    finished_at: new Date().toISOString(),
-    metadata: {
-      profile: parsed.profile,
-      pr: parsed.pr,
-      mr: parsed.mr,
-      non_interactive: parsed.nonInteractive,
-    },
-    prerequisites,
-    notes: runNotes,
-    steps: stepResults,
-  };
-
+  const startedAt = (options.now ? options.now() : new Date()).toISOString();
+  const runId = parsed.runId ?? `run-${startedAt.replace(/[:.]/g, "-")}`;
   const outputRoot = isAbsolute(parsed.output) ? parsed.output : join(cwd, parsed.output);
-  const outputDir = join(outputRoot, runId);
-  await mkdir(outputDir, { recursive: true });
-  await writeFile(join(outputDir, "run.json"), `${JSON.stringify(run, null, 2)}\n`);
+  const isMulti = scenarioIds.length > 1 || parsed.all;
+  const aggregateDir = join(outputRoot, runId);
+  const stdout: string[] = [];
+  const aggregateRuns: Array<Record<string, unknown>> = [];
+  let aggregateExit = 0;
 
-  stdout.push(`Recorded run ${runId} at ${join(parsed.output, runId, "run.json")}`);
+  for (const scenarioId of scenarioIds) {
+    const loaded = await loadScenario(cwd, scenarioId);
+    if (!loaded.ok) {
+      return {
+        exitCode: loaded.exitCode,
+        stdout: stdout.join("\n") + (stdout.length > 0 ? "\n" : ""),
+        stderr: loaded.error,
+      };
+    }
+
+    const scenarioDir = isMulti ? join(aggregateDir, loaded.scenario.id) : aggregateDir;
+    const scenarioRelDisplay = isMulti
+      ? join(parsed.output, runId, loaded.scenario.id)
+      : join(parsed.output, runId);
+
+    stdout.push(`samotest run ${loaded.scenario.id}`);
+    stdout.push(`Scenario: ${loaded.scenario.title}`);
+
+    const prerequisites = toStringList(loaded.scenario.prerequisites);
+    if (prerequisites.length > 0) {
+      stdout.push("Prerequisites:");
+      prerequisites.forEach((prerequisite, index) => stdout.push(`  ${index + 1}. ${prerequisite}`));
+    }
+
+    let runNotes: string[] = [];
+    if (parsed.nonInteractive) {
+      stdout.push("Run note skipped (--non-interactive).");
+    } else {
+      stdout.push("Run note (optional):");
+      runNotes = parseNotes(lines.next(), "run note:");
+    }
+
+    const stepResults: Array<{
+      id: string;
+      instruction?: string;
+      expected?: string;
+      status: StepStatus;
+      notes: string[];
+      attachments: Attachment[];
+      recording?: {
+        type: string;
+        path: string;
+        recorder: string;
+      };
+      error?: string;
+    }> = [];
+    const recordedArtifacts: Array<{ type: string; name: string; path: string }> = [];
+    const stepStartedAt = (options.now ? options.now() : new Date()).toISOString();
+
+    for (const [index, step] of loaded.scenario.steps.entries()) {
+      const stepId = step.id ?? `step-${index + 1}`;
+      stdout.push(`Step ${index + 1}: ${stepId}`);
+      if (step.instruction) {
+        stdout.push(`Instruction: ${step.instruction}`);
+      }
+      if (step.expected) {
+        stdout.push(`Expected: ${step.expected}`);
+      }
+
+      let status: StepStatus;
+      let notes: string[] = [];
+      let attachments: Attachment[] = [];
+      let recording: { type: string; path: string; recorder: string } | undefined;
+      let stepError: string | undefined;
+
+      const recorderSpec = stepRecorderSpec(step);
+
+      if (parsed.nonInteractive) {
+        if (recorderSpec) {
+          const captured = await captureStepRecording({
+            scenario: loaded.scenario,
+            step,
+            stepId,
+            scenarioDir,
+            recorderSpec,
+            options,
+          });
+          if (captured.ok) {
+            status = "passed";
+            recording = captured.recording;
+            attachments = [{ kind: captured.recording.type as EvidenceKind, path: captured.recording.path }];
+            recordedArtifacts.push({
+              type: captured.recording.type,
+              name: `${loaded.scenario.id}-${stepId}-${captured.recording.type}`,
+              path: join(scenarioDir, captured.recording.path),
+            });
+            stdout.push(`Captured ${captured.recording.type} for step ${stepId} at ${captured.recording.path}`);
+          } else {
+            status = "failed";
+            stepError = captured.reason;
+            stdout.push(`Recorder failed for step ${stepId}: ${captured.reason}`);
+          }
+        } else {
+          status = "passed";
+        }
+      } else {
+        stdout.push("Status [passed|failed|blocked|skipped|waived]:");
+        const rawStatus = lines.next().trim().toLowerCase();
+        if (!stepStatuses.has(rawStatus as StepStatus)) {
+          return {
+            exitCode: 3,
+            stdout: stdout.join("\n") + "\n",
+            stderr: `Invalid status for step ${stepId}: ${rawStatus || "<empty>"}\n`,
+          };
+        }
+        status = rawStatus as StepStatus;
+        if (status === "waived" && !allowsWaive(step)) {
+          return {
+            exitCode: 3,
+            stdout: stdout.join("\n") + "\n",
+            stderr: `Step ${stepId} does not allow waived status\n`,
+          };
+        }
+
+        stdout.push("Step note (optional):");
+        notes = parseNotes(lines.next(), "step note:");
+        stdout.push("Attachments, one per line; blank line to continue:");
+        const attachmentsResult = await readAttachments(lines, cwd);
+        if (!attachmentsResult.ok) {
+          return {
+            exitCode: 3,
+            stdout: stdout.join("\n") + "\n",
+            stderr: attachmentsResult.error,
+          };
+        }
+        attachments = attachmentsResult.attachments;
+      }
+
+      stepResults.push({
+        id: stepId,
+        instruction: step.instruction,
+        expected: step.expected,
+        status,
+        notes,
+        attachments,
+        ...(recording ? { recording } : {}),
+        ...(stepError ? { error: stepError } : {}),
+      });
+    }
+
+    const finishedAt = (options.now ? options.now() : new Date()).toISOString();
+    const status = summarizeRunStatus(stepResults.map((step) => step.status));
+    const run = {
+      schema_version: "0.1",
+      run_id: runId,
+      scenario: {
+        id: loaded.scenario.id,
+        title: loaded.scenario.title,
+        owner: loaded.scenario.owner,
+        priority: loaded.scenario.priority,
+        path: loaded.path,
+      },
+      status,
+      started_at: stepStartedAt,
+      finished_at: finishedAt,
+      metadata: {
+        profile: parsed.profile,
+        pr: parsed.pr,
+        mr: parsed.mr,
+        non_interactive: parsed.nonInteractive,
+      },
+      prerequisites,
+      notes: runNotes,
+      steps: stepResults,
+    };
+
+    await mkdir(scenarioDir, { recursive: true });
+    await writeFile(join(scenarioDir, "run.json"), `${JSON.stringify(run, null, 2)}\n`);
+
+    if (recordedArtifacts.length > 0) {
+      const commit = await currentCommit(cwd);
+      await writeEvidenceManifest({
+        runDir: scenarioDir,
+        run: {
+          id: runId,
+          scenario_id: loaded.scenario.id,
+          status,
+          started_at: stepStartedAt,
+          finished_at: finishedAt,
+          required: loaded.scenario.priority === "required",
+        },
+        source: {
+          commit,
+        },
+        environment: {
+          os: platform(),
+          redacted: true,
+          ...(parsed.profile ? { profile: parsed.profile } : {}),
+        },
+        artifacts: recordedArtifacts,
+        observations: stepResults.map((step) => ({
+          step_id: step.id,
+          status: step.status,
+          note: step.notes.join("; ") || undefined,
+        })),
+      });
+      stdout.push(`Wrote evidence manifest at ${join(scenarioRelDisplay, "manifest.json")}`);
+    }
+
+    stdout.push(`Recorded run ${runId} at ${join(scenarioRelDisplay, "run.json")}`);
+
+    aggregateRuns.push({
+      scenario_id: loaded.scenario.id,
+      status,
+      run_path: isMulti ? join(loaded.scenario.id, "run.json") : "run.json",
+      ...(recordedArtifacts.length > 0
+        ? { manifest_path: isMulti ? join(loaded.scenario.id, "manifest.json") : "manifest.json" }
+        : {}),
+    });
+
+    if (status === "failed") {
+      aggregateExit = 1;
+    }
+  }
+
+  if (isMulti) {
+    const aggregateStatuses = aggregateRuns.map((entry) => entry.status as StepStatus);
+    const aggregate = {
+      schema_version: "0.1",
+      run_id: runId,
+      status: summarizeRunStatus(aggregateStatuses),
+      started_at: startedAt,
+      finished_at: (options.now ? options.now() : new Date()).toISOString(),
+      runs: aggregateRuns,
+    };
+    await mkdir(aggregateDir, { recursive: true });
+    await writeFile(join(aggregateDir, "manifest.json"), `${JSON.stringify(aggregate, null, 2)}\n`);
+    stdout.push(`Aggregate manifest at ${join(parsed.output, runId, "manifest.json")}`);
+  }
+
   return {
-    exitCode: run.status === "failed" ? 1 : 0,
+    exitCode: aggregateExit,
     stdout: stdout.join("\n") + "\n",
     stderr: "",
   };
+}
+
+interface StepRecorderSpec {
+  type: "screenshot" | "video" | "gif" | "cast";
+  outputName?: string;
+  durationMs?: number;
+  url?: string;
+  command?: string;
+}
+
+function stepRecorderSpec(step: ScenarioStep): StepRecorderSpec | null {
+  const record = step as Record<string, unknown>;
+  const recorderTypes = new Set(["screenshot", "video", "gif", "cast"]);
+  const rawType =
+    stringValue(record.record) ??
+    stringValue(record.recorder) ??
+    stringValue(record.type) ??
+    stringValue(record.format) ??
+    stringValue(record.capture);
+  if (!rawType || !recorderTypes.has(rawType)) {
+    return null;
+  }
+  const recordingMeta = isRecord(record.recording) ? record.recording : undefined;
+  return {
+    type: rawType as StepRecorderSpec["type"],
+    outputName: stringValue(record.output) ?? stringValue(record.output_path) ?? stringValue(recordingMeta?.output_path) ?? undefined,
+    durationMs:
+      numberValue(record.duration_ms) ??
+      numberValue(record.durationMs) ??
+      numberValue(recordingMeta?.duration_ms) ??
+      numberValue(recordingMeta?.durationMs),
+    url: stringValue(record.url) ?? undefined,
+    command: stringValue(record.command) ?? undefined,
+  };
+}
+
+async function captureStepRecording(input: {
+  scenario: ScenarioDefinition;
+  step: ScenarioStep;
+  stepId: string;
+  scenarioDir: string;
+  recorderSpec: StepRecorderSpec;
+  options: RunCliOptions;
+}): Promise<
+  | { ok: true; recording: { type: string; path: string; recorder: string } }
+  | { ok: false; reason: string }
+> {
+  const { scenario, stepId, scenarioDir, recorderSpec, options } = input;
+  const artifactsDir = join(scenarioDir, "artifacts");
+  await mkdir(artifactsDir, { recursive: true });
+
+  if (recorderSpec.type === "screenshot") {
+    const url = recorderSpec.url ?? findBrowserScenarioUrl(scenario);
+    if (!url) {
+      return { ok: false, reason: `step ${stepId} screenshot needs a URL` };
+    }
+    const fileName = recorderSpec.outputName ?? `${stepId}.png`;
+    const screenshotPath = join(artifactsDir, fileName);
+    const recorder = options.screenshotRecorder ?? recordScreenshotWithPlaywright;
+    try {
+      const result = await recorder({ url, outputPath: screenshotPath });
+      return {
+        ok: true,
+        recording: {
+          type: "screenshot",
+          path: join("artifacts", fileName),
+          recorder: result.browser ?? "playwright",
+        },
+      };
+    } catch (error) {
+      return { ok: false, reason: formatError(error) };
+    }
+  }
+
+  if (recorderSpec.type === "video" || recorderSpec.type === "gif") {
+    const url = recorderSpec.url ?? findBrowserScenarioUrl(scenario);
+    if (!url) {
+      return { ok: false, reason: `step ${stepId} ${recorderSpec.type} needs a URL` };
+    }
+    const ext = recorderSpec.type === "gif" ? "gif" : "webm";
+    const fileName = recorderSpec.outputName ?? `${stepId}.${ext}`;
+    const outputPath = join(artifactsDir, fileName);
+    const recorder =
+      recorderSpec.type === "gif"
+        ? options.gifRecorder ?? recordGifFramesWithPlaywright
+        : options.videoRecorder ?? recordVideoWithPlaywright;
+    try {
+      const result = await recorder({
+        url,
+        outputPath,
+        durationMs: recorderSpec.durationMs ?? browserRecordingDurationMs(scenario),
+      });
+      return {
+        ok: true,
+        recording: {
+          type: recorderSpec.type,
+          path: join("artifacts", fileName),
+          recorder: result.browser ?? "chromium",
+        },
+      };
+    } catch (error) {
+      return { ok: false, reason: formatError(error) };
+    }
+  }
+
+  if (recorderSpec.type === "cast") {
+    const command = recorderSpec.command ?? findTerminalScenarioCommand(scenario);
+    if (!command) {
+      return { ok: false, reason: `step ${stepId} cast needs a command` };
+    }
+    const fileName = recorderSpec.outputName ?? `${stepId}.cast`;
+    const castPath = join(artifactsDir, fileName);
+    const recorder = options.castRecorder ?? recordCastWithAsciinema;
+    try {
+      const result = await recorder({ command, outputPath: castPath, cwd: input.options.cwd ?? process.cwd() });
+      return {
+        ok: true,
+        recording: {
+          type: "cast",
+          path: join("artifacts", fileName),
+          recorder: result.tool ?? "asciinema",
+        },
+      };
+    } catch (error) {
+      return { ok: false, reason: formatError(error) };
+    }
+  }
+
+  return { ok: false, reason: `unsupported recorder type ${recorderSpec.type}` };
 }
 
 async function initProject(cwd: string): Promise<void> {
@@ -1828,10 +2114,23 @@ function bodyWithGitLabUploads(
 ): string {
   const lines = [body.trimEnd(), "", "### Hosted GitLab uploads"];
   for (const artifact of artifacts) {
-    lines.push(`- ${artifact.localPath}: ${absoluteGitLabUrl(baseUrl, artifact.url)}`);
+    const url = absoluteGitLabUrl(baseUrl, artifact.url);
+    if (isInlineImagePath(artifact.localPath)) {
+      lines.push(`- ${artifact.localPath}:`);
+      lines.push("");
+      lines.push(`  ![${artifact.localPath}](${url})`);
+      lines.push("");
+    } else {
+      lines.push(`- ${artifact.localPath}: ${url}`);
+    }
   }
   lines.push(`- manifest.json: ${absoluteGitLabUrl(baseUrl, manifest.url)}`);
   return `${lines.join("\n")}\n`;
+}
+
+function isInlineImagePath(path: string): boolean {
+  const ext = path.toLowerCase().split(".").pop() ?? "";
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext);
 }
 
 function absoluteGitLabUrl(baseUrl: string, url: string): string {
@@ -1888,8 +2187,10 @@ function parseEvidenceInspectArgs(args: string[]): EvidenceInspectArgs {
 
 function parseRunArgs(args: string[]): RunCommandArgs {
   const parsed: RunCommandArgs = {
+    scenarioIds: [],
     output: ".samo/evidence",
     nonInteractive: false,
+    all: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -1913,8 +2214,10 @@ function parseRunArgs(args: string[]): RunCommandArgs {
       index += 1;
     } else if (arg === "--non-interactive") {
       parsed.nonInteractive = true;
-    } else if (!arg.startsWith("-") && !parsed.scenarioId) {
-      parsed.scenarioId = arg;
+    } else if (arg === "--all") {
+      parsed.all = true;
+    } else if (!arg.startsWith("-")) {
+      parsed.scenarioIds.push(arg);
     }
   }
 

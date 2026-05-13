@@ -14,7 +14,7 @@ describe("samotest CLI", () => {
     assert.match(result.stdout, /samotest init/);
     assert.match(result.stdout, /samotest scenario list/);
     assert.match(result.stdout, /samotest scenario validate \[path\]/);
-    assert.match(result.stdout, /samotest run <scenario-id>/);
+    assert.match(result.stdout, /samotest run <scenario-id/);
     assert.match(result.stdout, /samotest evidence inspect <run-id-or-path>/);
     assert.match(result.stdout, /samotest gate check --manifest <path>/);
     assert.match(result.stdout, /samotest doctor/);
@@ -65,14 +65,11 @@ describe("samotest CLI", () => {
     assert.match(result.stderr, /result\.required_observations/);
   });
 
-  it("runs a scenario non-interactively and records step statuses, notes, and attachments", async () => {
+  it("runs a scenario non-interactively without prompting on stdin and defaults steps to passed", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "samotest-run-"));
 
     try {
       await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
-      await mkdir(join(cwd, "artifacts"), { recursive: true });
-      await writeFile(join(cwd, "artifacts/open-cart.png"), "fake screenshot");
-      await writeFile(join(cwd, "artifacts/apply-code.log"), "fake log");
       await writeFile(
         join(cwd, "samo/scenarios/checkout-discount-demo.yaml"),
         `id: checkout-discount-demo
@@ -106,34 +103,23 @@ result:
         ],
         {
           cwd,
-          stdin: [
-            "run note: observed in Chrome",
-            "passed",
-            "step note: cart rendered",
-            "screenshot artifacts/open-cart.png",
-            "",
-            "waived",
-            "step note: discount service waived by QA lead",
-            "log artifacts/apply-code.log",
-            "",
-          ].join("\n"),
+          // Intentionally pass no stdin: --non-interactive must not block on EOF.
+          stdin: "",
         },
       );
 
-      assert.equal(result.exitCode, 0);
+      assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /Recorded run run-001/);
+      assert.match(result.stdout, /Run note skipped/);
+      assert.doesNotMatch(result.stdout, /Status \[passed\|failed/);
 
       const run = JSON.parse(
         await readFile(join(cwd, ".samo/evidence/run-001/run.json"), "utf8"),
       );
       assert.equal(run.scenario.id, "checkout-discount-demo");
-      assert.equal(run.notes[0], "observed in Chrome");
+      assert.equal(run.metadata.non_interactive, true);
       assert.equal(run.steps[0].status, "passed");
-      assert.equal(run.steps[0].notes[0], "cart rendered");
-      assert.equal(run.steps[0].attachments[0].kind, "screenshot");
-      assert.equal(run.steps[0].attachments[0].path, "artifacts/open-cart.png");
-      assert.equal(run.steps[1].status, "waived");
-      assert.equal(run.steps[1].attachments[0].kind, "log");
+      assert.equal(run.steps[1].status, "passed");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
@@ -214,13 +200,184 @@ result:
 `,
       );
 
-      const result = await runCli(["run", "no-waive", "--non-interactive"], {
+      const result = await runCli(["run", "no-waive"], {
         cwd,
         stdin: ["", "waived", "", ""].join("\n"),
       });
 
       assert.equal(result.exitCode, 3);
       assert.match(result.stderr, /Step only-step does not allow waived status/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("invokes recorders for screenshot steps during --non-interactive run", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-run-rec-"));
+
+    try {
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
+      await writeFile(
+        join(cwd, "samo/scenarios/browser-checkout.yaml"),
+        `id: browser-checkout
+title: Browser checkout smoke
+owner: "@team-web"
+priority: required
+target:
+  type: browser
+  url: "https://example.test/checkout"
+steps:
+  - id: open-checkout
+    instruction: "Open checkout."
+    record: screenshot
+result:
+  required_observations:
+    - "Checkout renders."
+`,
+      );
+
+      let recorderCalls = 0;
+      const result = await runCli(
+        [
+          "run",
+          "browser-checkout",
+          "--non-interactive",
+          "--run-id",
+          "run-rec-001",
+          "--output",
+          ".samo/evidence",
+        ],
+        {
+          cwd,
+          stdin: "",
+          screenshotRecorder: async ({ url, outputPath }) => {
+            recorderCalls += 1;
+            assert.equal(url, "https://example.test/checkout");
+            await writeFile(outputPath, "fake png bytes");
+            return { browser: "stub-browser" };
+          },
+        },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(recorderCalls, 1);
+
+      const screenshotPath = join(cwd, ".samo/evidence/run-rec-001/artifacts/open-checkout.png");
+      assert.equal((await stat(screenshotPath)).isFile(), true);
+
+      const manifest = JSON.parse(
+        await readFile(join(cwd, ".samo/evidence/run-rec-001/manifest.json"), "utf8"),
+      );
+      assert.equal(manifest.run.scenario_id, "browser-checkout");
+      assert.equal(manifest.artifacts[0].type, "screenshot");
+      assert.equal(manifest.artifacts[0].path, "artifacts/open-checkout.png");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("runs multiple scenarios in one invocation and writes an aggregate manifest", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-run-multi-"));
+
+    try {
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
+      for (const id of ["alpha", "beta"]) {
+        await writeFile(
+          join(cwd, `samo/scenarios/${id}.yaml`),
+          `id: ${id}
+title: Scenario ${id}
+owner: "@team-web"
+priority: required
+steps:
+  - id: only-step
+    instruction: "Just observe."
+result:
+  required_observations:
+    - "It happened."
+`,
+        );
+      }
+
+      const result = await runCli(
+        [
+          "run",
+          "alpha",
+          "beta",
+          "--non-interactive",
+          "--run-id",
+          "run-multi-001",
+          "--output",
+          ".samo/evidence",
+        ],
+        { cwd, stdin: "" },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+
+      const alpha = JSON.parse(
+        await readFile(join(cwd, ".samo/evidence/run-multi-001/alpha/run.json"), "utf8"),
+      );
+      const beta = JSON.parse(
+        await readFile(join(cwd, ".samo/evidence/run-multi-001/beta/run.json"), "utf8"),
+      );
+      assert.equal(alpha.scenario.id, "alpha");
+      assert.equal(beta.scenario.id, "beta");
+
+      const aggregate = JSON.parse(
+        await readFile(join(cwd, ".samo/evidence/run-multi-001/manifest.json"), "utf8"),
+      );
+      assert.equal(aggregate.run_id, "run-multi-001");
+      assert.equal(aggregate.runs.length, 2);
+      assert.deepEqual(
+        aggregate.runs.map((entry: { scenario_id: string }) => entry.scenario_id).sort(),
+        ["alpha", "beta"],
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("runs every scenario with --all and writes an aggregate manifest", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "samotest-run-all-"));
+
+    try {
+      await mkdir(join(cwd, "samo/scenarios"), { recursive: true });
+      for (const id of ["one", "two", "three"]) {
+        await writeFile(
+          join(cwd, `samo/scenarios/${id}.yaml`),
+          `id: ${id}
+title: Scenario ${id}
+owner: "@team-web"
+priority: required
+steps:
+  - id: step
+    instruction: "Observe."
+result:
+  required_observations:
+    - "Done."
+`,
+        );
+      }
+
+      const result = await runCli(
+        [
+          "run",
+          "--all",
+          "--non-interactive",
+          "--run-id",
+          "run-all-001",
+          "--output",
+          ".samo/evidence",
+        ],
+        { cwd, stdin: "" },
+      );
+
+      assert.equal(result.exitCode, 0, result.stderr);
+
+      const aggregate = JSON.parse(
+        await readFile(join(cwd, ".samo/evidence/run-all-001/manifest.json"), "utf8"),
+      );
+      assert.equal(aggregate.runs.length, 3);
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
