@@ -39,7 +39,7 @@ describe("release packaging", () => {
     assert.match(readme, /samotest run my-scenario/);
     assert.match(readme, /samotest evidence inspect/);
     assert.match(readme, /samotest gate check --manifest/);
-    assert.match(readme, /v0\.3\.0 is ready for early real use/);
+    assert.match(readme, /v0\.2\.2 is ready for early real use/);
     assert.doesNotMatch(readme, /0\.1\.0/);
     assert.doesNotMatch(readme, /scenario validate is not implemented yet/);
     assert.match(readme, /samotest doctor/);
