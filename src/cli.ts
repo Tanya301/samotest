@@ -10,6 +10,9 @@ import { formatEvidenceInspectionText, inspectEvidence, packageEvidenceZip, writ
 import { checkGate, formatGateReportMarkdown } from "./gate.js";
 import { validateScenarioFile } from "./scenarioValidation.js";
 import type { ScenarioDefinition, ScenarioStep, ScenarioValidationError } from "./scenarioValidation.js";
+import { runAutomated, type AutomatedRunnerDriver, type PhaseSummary } from "./automatedRunner.js";
+import { MissingEnvVarError } from "./envInterpolation.js";
+import { realPlaywrightDriver } from "./playwrightDriver.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +33,26 @@ export interface RunCliOptions {
   gifConverter?: GifConverter;
   castRecorder?: CastRecorder;
   now?: () => Date;
+  /**
+   * Override Playwright driver for `samotest run --automated`. Tests inject
+   * a mock; production defaults to `realPlaywrightDriver`.
+   */
+  automatedDriver?: AutomatedRunnerDriver;
+  /**
+   * Environment lookup for `${env.*}` interpolation. Defaults to
+   * `process.env`. Tests use this to inject a controlled env.
+   */
+  env?: Record<string, string | undefined>;
+  /**
+   * Sink for phase comments emitted by `--automated`. Defaults to logging
+   * to stdout under the `[phase]` prefix.
+   */
+  onPhaseComplete?: (summary: PhaseSummary) => void | Promise<void>;
+  /**
+   * Sink for heartbeat lines emitted by long inactivity waits. Defaults
+   * to stderr.
+   */
+  onHeartbeat?: (line: string) => void;
 }
 
 export interface RecorderAvailability {
@@ -91,7 +114,7 @@ const sprintCommands = [
   "samotest init",
   "samotest scenario list",
   "samotest scenario validate [path]",
-  "samotest run <scenario-id> [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]",
+  "samotest run <scenario-id> [--automated] [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]",
   "samotest record <scenario-id> [--format screenshot|gif|video|cast] [--output <dir>]",
   "samotest evidence inspect <run-id-or-path>",
   "samotest evidence package <run-id-or-path> [--format dir|zip]",
@@ -171,6 +194,7 @@ interface RunCommandArgs {
   pr?: string;
   mr?: string;
   nonInteractive: boolean;
+  automated: boolean;
 }
 
 interface RecordCommandArgs {
@@ -202,7 +226,7 @@ export async function runCli(args: string[], options: RunCliOptions = {}): Promi
   }
 
   if (command === "--version" || command === "-V") {
-    return { exitCode: 0, stdout: "0.2.0\n", stderr: "" };
+    return { exitCode: 0, stdout: "0.2.2\n", stderr: "" };
   }
 
   if (command === "init") {
@@ -272,6 +296,10 @@ async function runScenario(args: string[], options: RunCliOptions): Promise<CliR
       stdout: "",
       stderr: loaded.error,
     };
+  }
+
+  if (parsed.automated) {
+    return runScenarioAutomated({ cwd, parsed, scenario: loaded.scenario, options });
   }
 
   const input = options.stdin ?? await readAvailableStdin();
@@ -379,6 +407,76 @@ async function runScenario(args: string[], options: RunCliOptions): Promise<CliR
     stdout: stdout.join("\n") + "\n",
     stderr: "",
   };
+}
+
+async function runScenarioAutomated(input: {
+  cwd: string;
+  parsed: RunCommandArgs;
+  scenario: ScenarioDefinition;
+  options: RunCliOptions;
+}): Promise<CliResult> {
+  const { cwd, parsed, scenario, options } = input;
+  const now = options.now ? options.now() : new Date();
+  const runId = parsed.runId ?? `run-${now.toISOString().replace(/[:.]/g, "-")}`;
+  const outputRoot = isAbsolute(parsed.output) ? parsed.output : join(cwd, parsed.output);
+  const driver = options.automatedDriver ?? realPlaywrightDriver;
+
+  const stdoutLines: string[] = [];
+  stdoutLines.push(`samotest run --automated ${scenario.id}`);
+  stdoutLines.push(`Scenario: ${scenario.title}`);
+
+  const phaseSink =
+    options.onPhaseComplete ??
+    ((summary: PhaseSummary) => {
+      const failed = summary.steps.filter((step) => step.status === "failed");
+      const tag = summary.status === "passed" ? "PASS" : "FAIL";
+      stdoutLines.push(
+        `[phase ${tag}] ${summary.phase}: ${summary.steps.length} step(s), ${(summary.total_duration_ms / 1000).toFixed(1)}s${failed.length > 0 ? `, ${failed.length} failed` : ""}`,
+      );
+    });
+
+  try {
+    const result = await runAutomated({
+      scenario,
+      runId,
+      outputRoot,
+      cwd,
+      driver,
+      env: options.env,
+      onPhaseComplete: phaseSink,
+      onHeartbeat: options.onHeartbeat,
+      now: options.now,
+      currentCommit,
+    });
+
+    const manifestRelative = join(parsed.output, runId, "manifest.json");
+    stdoutLines.push(`Run status: ${result.status}`);
+    stdoutLines.push(`Captured ${result.artifacts.length} artifact(s) across ${result.phaseSummaries.length} phase(s)`);
+    stdoutLines.push(`Wrote evidence manifest at ${manifestRelative}`);
+    if (result.failedStepId) {
+      stdoutLines.push(`Failure step: ${result.failedStepId}`);
+    }
+
+    return {
+      exitCode: result.status === "failed" ? 1 : 0,
+      stdout: `${stdoutLines.join("\n")}\n`,
+      stderr: "",
+    };
+  } catch (error) {
+    if (error instanceof MissingEnvVarError) {
+      return {
+        exitCode: 3,
+        stdout: `${stdoutLines.join("\n")}\n`,
+        stderr: `${error.message}\n`,
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: 2,
+      stdout: `${stdoutLines.join("\n")}\n`,
+      stderr: `Automated run failed: ${message}\n`,
+    };
+  }
 }
 
 async function initProject(cwd: string): Promise<void> {
@@ -1890,6 +1988,7 @@ function parseRunArgs(args: string[]): RunCommandArgs {
   const parsed: RunCommandArgs = {
     output: ".samo/evidence",
     nonInteractive: false,
+    automated: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -1913,6 +2012,8 @@ function parseRunArgs(args: string[]): RunCommandArgs {
       index += 1;
     } else if (arg === "--non-interactive") {
       parsed.nonInteractive = true;
+    } else if (arg === "--automated") {
+      parsed.automated = true;
     } else if (!arg.startsWith("-") && !parsed.scenarioId) {
       parsed.scenarioId = arg;
     }

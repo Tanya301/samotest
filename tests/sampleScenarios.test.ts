@@ -41,4 +41,20 @@ describe("Sprint 1 sample scenarios and demo evidence", () => {
     assert.equal(inspection.manifest.artifacts?.[0]?.type, "log");
     assert.equal(inspection.artifact_checks[0]?.ok, true);
   });
+
+  it("ships a v0.3 automated-mode sample scenario that validates against the schema", async () => {
+    const result = await validateScenarioFile(join(repoRoot, "samples/automated-smoke.yaml"));
+    assert.equal(result.valid, true, "samples/automated-smoke.yaml should validate under the schema");
+    if (result.valid) {
+      const steps = result.scenario.steps;
+      const actionTypes = steps
+        .map((step) => step.action?.type)
+        .filter((value): value is string => typeof value === "string");
+      assert.ok(actionTypes.includes("navigate"));
+      assert.ok(actionTypes.includes("form_fill"));
+      assert.ok(actionTypes.includes("screenshot"));
+      assert.ok(actionTypes.includes("api_call"));
+      assert.ok(actionTypes.includes("assert_url_matches"));
+    }
+  });
 });

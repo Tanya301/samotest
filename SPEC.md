@@ -17,12 +17,18 @@ The first version should focus on reproducible manual test scenarios for local a
 
 ## Non-Goals
 
-- `samotest` is not an automated test runner replacement for unit, integration, or end-to-end suites.
-- It does not attempt to certify correctness without human review.
+- `samotest` does not attempt to certify correctness without human review of the resulting evidence.
 - It does not execute untrusted scenarios from external contributors without explicit opt-in.
 - It does not store evidence in a hosted SaaS service in the initial product.
 - It does not provide pixel-perfect visual regression comparison in Sprint 1.
-- It does not implement a full browser automation framework from scratch; it should wrap or orchestrate proven tools where needed.
+- It does not implement a full browser automation framework from scratch; it wraps Playwright (Chromium) under the automated runner and orchestrates proven tools elsewhere.
+
+> v0.2 listed "not an automated test runner replacement" as a non-goal.
+> v0.3 amends that: `samotest run --automated <scenario>` is now a
+> first-class capability. Scenarios that opt into automation by declaring
+> `action:` blocks on every step become the canonical release-gate
+> walker and replace bespoke Playwright drivers. Scenarios without
+> `action:` blocks continue to run as guided-manual, unchanged.
 
 ## Primary Users
 
@@ -90,7 +96,7 @@ The CLI should be explicit, scriptable, and local-first.
 samotest init
 samotest scenario list
 samotest scenario validate [path]
-samotest run <scenario-id> [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]
+samotest run <scenario-id> [--automated] [--profile <name>] [--output <dir>] [--pr <id>] [--mr <id>]
 samotest record <scenario-id> [--format screenshot|gif|video|cast] [--output <dir>]
 samotest evidence inspect <run-id-or-path>
 samotest evidence package <run-id-or-path> [--format dir|zip]
@@ -105,7 +111,7 @@ samotest doctor
 - `init`: creates the shared `samo/` and `.samo/` structure plus a starter config.
 - `scenario list`: lists scenarios, owners, tags, and required evidence.
 - `scenario validate`: validates scenario syntax and required fields.
-- `run`: starts an interactive guided test run and captures evidence.
+- `run`: starts a scenario run and captures evidence. Without `--automated`, the run is interactive and guided. With `--automated`, every step's `action:` block is executed against a Playwright Chromium session and evidence is captured automatically (see "Automated Mode" below).
 - `record`: creates screenshot/GIF/video/cast artifacts from scenario recording instructions.
 - `evidence inspect`: prints a human-readable and machine-readable summary.
 - `evidence package`: builds a portable evidence bundle.
@@ -184,6 +190,33 @@ recording:
   tape: "samo/tapes/checkout-discount-demo.tape"
 ```
 
+Steps that opt into automated execution add a `phase:` label and an
+`action:` block. Example:
+
+```yaml
+steps:
+  - id: login
+    phase: auth
+    instruction: "Fill login form with fixture creds."
+    expected: "Redirect to /dashboard."
+    action:
+      type: form_fill
+      url: "${env.RELEASE_GATE_BASE_URL}/login"
+      fields:
+        - selector: "#email"
+          value: "${env.RELEASE_GATE_TEST_EMAIL}"
+        - selector: "#password"
+          value: "${env.RELEASE_GATE_TEST_PASSWORD}"
+      submit: "[data-testid=login-submit]"
+      await: "${env.RELEASE_GATE_BASE_URL}/dashboard"
+    evidence:
+      - type: screenshot
+        name: dashboard-loaded
+```
+
+Action types and their parameters are listed in the "Automated Mode"
+section below.
+
 ### Required Scenario Fields
 
 - `id`
@@ -205,6 +238,105 @@ recording:
   - `output_path`: optional repo-relative path for a copy of the final requested recording artifact, such as `docs/demo.gif`.
 - `risk`
 - `waiver_policy`
+- Per-step `phase` (string label, used by `--automated` for consolidated phase comments).
+- Per-step `action` (typed automated action; see "Automated Mode" below).
+
+## Automated Mode (v0.3)
+
+`samotest run --automated <scenario-id>` executes every step's
+`action:` block programmatically against a Playwright Chromium session.
+It exists so the canonical release-gate walker can be a thin
+`samotest run --automated <scenario>` call instead of a bespoke
+Playwright spec per repository.
+
+### When to use
+
+- Continuous release-gate walks against a deployed environment.
+- Per-tag deploy verification (`samotest walk after every deploy` rule).
+- Any scenario where every step is mechanical and a human reviewer
+  inspects the resulting evidence rather than authoring the keystrokes.
+
+Scenarios without `action:` blocks on their steps continue to run as
+guided-manual under `samotest run`. Mixing modes in one scenario fails
+loudly: under `--automated`, every step must declare an `action:`.
+
+### Action types
+
+Each step's `action:` is an object with a `type:` field plus type-specific
+parameters. The v0.3 supported types are:
+
+| `type`                | Required fields                                              | Behaviour                                                                                                  |
+| --------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `navigate`            | `url`                                                        | `page.goto(url)`. Optional `wait_for_selector` waits for a selector after load.                            |
+| `click`               | `selector`                                                   | `page.click(selector)`.                                                                                    |
+| `fill`                | `selector`, `value`                                          | `page.fill(selector, value)`.                                                                              |
+| `form_fill`           | `fields[]` (each `selector` + `value`)                       | Optional `url` navigates first. Fills each field. Optional `submit` selector clicks. Optional `await` waits for URL or selector. |
+| `wait_for_selector`   | `selector`                                                   | `page.waitForSelector(selector)`. Optional `timeout_ms`.                                                   |
+| `wait_for_inactivity` | `selector`                                                   | Polls the DOM and declares success when the fingerprint stops changing for `stale_after_ms` (default 30s). NO wall-clock kill (HARD RULE 10). |
+| `assert_text`         | `selector`, `expected` (string substring or `{ regex: "" }`) | Fails clearly when the selector's text doesn't contain the substring or match the regex.                   |
+| `assert_url_matches`  | `regex`                                                      | Fails clearly when `page.url()` doesn't match the regex.                                                   |
+| `screenshot`          | (none)                                                       | Captures a full-page PNG under `artifacts/`. Auto-numbered or `name:`-overridden.                          |
+| `play_record_video`   | (none)                                                       | Writes a per-step boundary marker (`start`/`stop`/`mark`) for the run-level video Playwright records.      |
+| `api_call`            | `url`                                                        | `fetch(url, { method, headers, body })`. Optional `expect_status` + `expect_json_contains` assertions. Persists a sanitized request/response transcript as a `log` artifact. |
+| `gh_assert`           | `args[]`                                                     | Runs `gh <args...>`. Optional `expect_contains` asserts a substring in stdout. For repo / branch / commit checks during release walks. |
+
+Unknown `action.type` values fail validation at scenario load time and
+also fail at execution time — no half-measures, no silent skip.
+
+### Phases
+
+Each step can carry a `phase:` label. Consecutive steps that share the
+same `phase:` are grouped into one consolidated comment posted by the
+runner (per `consolidated-status-not-spam`). The default phase, used
+when no `phase:` is declared, is `default`.
+
+A typical release-gate walk uses phases like `bootstrap`, `auth`,
+`wizard`, `spec`, `accept`, `codegen`, `deploy`, `app-flow`, `cleanup`.
+
+### Environment interpolation
+
+Any string value in the scenario YAML may contain
+`${env.VAR_NAME}` or `${env.VAR_NAME:-fallback}` tokens. The runner
+substitutes them from the process environment at scenario load time.
+Missing required variables (no fallback supplied AND no value present)
+cause the run to fail loudly with `MissingEnvVarError` listing every
+missing reference; the runner never silently treats a missing var as
+an empty string. This matches the canonical release-gate walker's
+fail-loudly contract.
+
+### Inactivity heartbeat (HARD RULE 10)
+
+Long LLM-bound or deploy-bound waits use `wait_for_inactivity`, which
+runs a probe + DOM fingerprint loop and:
+
+- emits one `[heartbeat] still waiting for <step> (<n>s elapsed)`
+  line every `heartbeat_ms` (default 15s) on stderr;
+- declares success when the fingerprint has been identical for
+  `stale_after_ms` (default 30s);
+- never wall-clock-kills.
+
+This is the canonical pattern for spec-rounds, codegen progress, and
+deploy probes inside scenario runs.
+
+### Evidence captured automatically
+
+Every automated run produces:
+
+- one `recordVideo` WebM under `artifacts/run.webm`;
+- one `recordHar` JSON under `artifacts/run.har`;
+- a `console.log` of every console + pageerror event;
+- a full-page screenshot for every `screenshot` action;
+- a per-step transcript for every `api_call`;
+- a per-step boundary marker for every `play_record_video` action;
+- a crash screenshot at the failure point if any step fails.
+
+All of the above are referenced in the same `manifest.json` schema
+(`schema_version: "0.1"`) that the guided mode emits, so `samorev`,
+`gate check`, and the GitHub/GitLab upload paths require no changes.
+
+A v0.3 `phase-summaries.json` sidecar is also written under the run
+directory with one entry per logical phase for downstream consolidated
+comment renderers.
 
 ## Evidence Artifacts
 
