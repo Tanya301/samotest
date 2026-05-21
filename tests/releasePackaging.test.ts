@@ -14,7 +14,7 @@ describe("release packaging", () => {
     const packageJson = await readJson("package.json");
 
     assert.equal(packageJson.name, "samotest");
-    assert.equal(packageJson.version, "0.3.0");
+    assert.equal(packageJson.version, "0.2.2");
     assert.equal(packageJson.license, "Apache-2.0");
     assert.equal(packageJson.packageManager, "bun@1.3.13");
     assert.deepEqual(packageJson.bin, { samotest: "./dist/cli.js" });
@@ -82,9 +82,9 @@ describe("release packaging", () => {
         },
       });
 
-      assert.equal(bin.stdout, "0.3.0\n");
+      assert.equal(bin.stdout, "0.2.2\n");
       assert.equal(bin.stderr, "");
-      assert.equal(bunOnlyBin.stdout, "0.3.0\n");
+      assert.equal(bunOnlyBin.stdout, "0.2.2\n");
       assert.equal(bunOnlyBin.stderr, "");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
