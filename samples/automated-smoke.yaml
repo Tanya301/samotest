@@ -1,0 +1,77 @@
+id: automated-smoke
+title: Automated step-execution smoke walk (v0.3)
+owner: "@samotest"
+priority: required
+tags: ["samotest", "automated", "smoke"]
+applies_to:
+  paths:
+    - "src/automatedRunner.ts"
+    - "src/automatedActions.ts"
+environment:
+  profile: local
+  browser: chromium
+prerequisites:
+  - "Local fixture HTTP server reachable at ${env.SMOKE_BASE_URL}."
+  - "Run with: samotest run --automated automated-smoke"
+steps:
+  - id: landing
+    phase: bootstrap
+    instruction: "Open the fixture landing page and confirm a 200 response."
+    expected: "Landing page renders; login link visible."
+    action:
+      type: navigate
+      url: "${env.SMOKE_BASE_URL}/"
+      wait_for_selector: "a#login"
+    evidence:
+      - type: screenshot
+        name: 01-landing
+
+  - id: login
+    phase: auth
+    instruction: "Drive the login form with fixture credentials."
+    expected: "POST submits, redirect lands on /dashboard."
+    action:
+      type: form_fill
+      url: "${env.SMOKE_BASE_URL}/login"
+      fields:
+        - selector: "#email"
+          value: "${env.SMOKE_TEST_EMAIL:-u@e.com}"
+        - selector: "#password"
+          value: "${env.SMOKE_TEST_PASSWORD:-pw}"
+      submit: "[data-testid=submit]"
+      await: "${env.SMOKE_BASE_URL}/dashboard"
+    evidence:
+      - type: screenshot
+        name: 02-dashboard
+
+  - id: dashboard-shot
+    phase: auth
+    action:
+      type: screenshot
+      name: 03-dashboard
+
+  - id: version-probe
+    phase: assert
+    instruction: "Hit /api/version and assert deployed tag."
+    expected: "200 + JSON body contains the configured tag."
+    action:
+      type: api_call
+      method: GET
+      url: "${env.SMOKE_BASE_URL}/api/version"
+      expect_status: 200
+      expect_json_contains:
+        version: "${env.SMOKE_EXPECTED_VERSION:-v0.3.0-test}"
+
+  - id: dashboard-url-assert
+    phase: assert
+    action:
+      type: assert_url_matches
+      regex: ".*/dashboard$"
+result:
+  required_observations:
+    - "Bootstrap phase renders landing page."
+    - "Auth phase drives the login form and lands on /dashboard."
+    - "Assert phase validates /api/version against the configured tag."
+recording:
+  mode: browser
+  preferred_formats: ["video", "screenshot"]

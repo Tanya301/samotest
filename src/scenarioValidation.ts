@@ -6,7 +6,45 @@ export interface ScenarioStep {
   instruction?: string;
   expected?: string;
   evidence?: unknown;
+  /**
+   * Optional phase label. The automated runner groups steps that share the
+   * same `phase` into a single consolidated comment per logical phase.
+   * If absent, the step inherits the previous step's phase (or "default").
+   */
+  phase?: string;
+  /**
+   * Optional automated action. Backwards-compatible: scenarios without
+   * `action` continue to run as guided-manual (existing behaviour).
+   */
+  action?: ScenarioStepAction;
 }
+
+/**
+ * Automated step action. The runner switches on `action.type` and executes
+ * the action against a single long-lived Playwright page. v0.3 supported
+ * types are listed in `AUTOMATED_ACTION_TYPES`.
+ */
+export interface ScenarioStepAction {
+  type: string;
+  [key: string]: unknown;
+}
+
+export const AUTOMATED_ACTION_TYPES = [
+  "navigate",
+  "click",
+  "fill",
+  "form_fill",
+  "wait_for_selector",
+  "wait_for_inactivity",
+  "assert_text",
+  "assert_url_matches",
+  "screenshot",
+  "play_record_video",
+  "api_call",
+  "gh_assert",
+] as const;
+
+export type AutomatedActionType = (typeof AUTOMATED_ACTION_TYPES)[number];
 
 export interface ScenarioDefinition {
   id: string;
@@ -109,6 +147,37 @@ export function validateScenarioContent(
         `Scenario file ${filePath} must define required field result.required_observations as a non-empty string list.`,
       ),
     );
+  }
+
+  if (Array.isArray(parsed.steps)) {
+    parsed.steps.forEach((rawStep, index) => {
+      if (!isRecord(rawStep)) {
+        return;
+      }
+      const action = (rawStep as Record<string, unknown>).action;
+      if (action === undefined || action === null) {
+        return;
+      }
+      if (!isRecord(action) || !isNonEmptyString(action.type)) {
+        errors.push(
+          buildError(
+            filePath,
+            `steps[${index}].action`,
+            `Scenario file ${filePath} step ${index} has an action that must be an object with a non-empty string \`type\`.`,
+          ),
+        );
+        return;
+      }
+      if (!(AUTOMATED_ACTION_TYPES as readonly string[]).includes(action.type)) {
+        errors.push(
+          buildError(
+            filePath,
+            `steps[${index}].action.type`,
+            `Scenario file ${filePath} step ${index} has unknown action.type \`${action.type}\`. Supported: ${AUTOMATED_ACTION_TYPES.join(", ")}.`,
+          ),
+        );
+      }
+    });
   }
 
   if (errors.length > 0) {
