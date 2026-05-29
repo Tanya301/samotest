@@ -1,0 +1,111 @@
+id: spec-from-repo-walk
+title: samo.team spec-from-repo walk — login → existing-repo project → draft spec from codebase → assert draft renders
+owner: "@manager-maya"
+tags: ["samo-team", "prod", "spec-from-repo", "post-deploy", "!532"]
+priority: required
+applies_to:
+  paths:
+    - "app/frontend/**"
+    - "app/backend/**"
+
+environment:
+  profile: prod
+  base_url: https://samo.team
+  browser: chromium
+
+prerequisites:
+  - "samo.team prod is deployed at the tag under test (verify /api/version responds with expected tag)."
+  - "OUT-OF-BAND: fixture test account exists on prod (operator-provisioned). The walker does NOT signup. If login is rejected, FAIL the run and stop — do not attempt account creation."
+  - "Fixture credentials available as env vars RELEASE_GATE_TEST_EMAIL and RELEASE_GATE_TEST_PASSWORD. If either is unset or empty, FAIL immediately before launching a browser."
+  - "A fixture project connected to an existing GitHub/GitLab repo must be present under the fixture account. As of 2026-05-29, project 314 (ttt-rg-87b829, connected to samo-agent/ttt-rg-87b829) serves this role. If that project is gone, find another existing-repo project via the dashboard or STOP and report."
+  - "samotest CLI does not launch a browser itself; an external Playwright driver supplies evidence attached via 'samotest evidence'."
+
+steps:
+  - id: env-check
+    instruction: "Before launching a browser, verify both RELEASE_GATE_TEST_EMAIL and RELEASE_GATE_TEST_PASSWORD are set and non-empty in the process environment. Do NOT echo the values. If either is missing, FAIL immediately."
+    expected: "Both env vars present and non-empty. No HTTP call made — this step is purely environmental."
+    evidence: []
+
+  - id: login
+    instruction: "Navigate to ${base_url}/login. Form-fill: fill [type=email] with $RELEASE_GATE_TEST_EMAIL, fill [type=password] with $RELEASE_GATE_TEST_PASSWORD, click [type=submit]. Wait for redirect to /dashboard (waitUntil: networkidle, timeout 30s). Do NOT call /auth/token directly; do NOT seed localStorage. If the form returns an error or stays on /login, FAIL the run — fixture account may need re-provisioning."
+    expected: "Browser lands on /dashboard with authenticated nav visible (user avatar or project list). HTTP 200."
+    evidence:
+      - type: screenshot
+        name: walk-01-dashboard
+
+  - id: find-existing-repo-project
+    instruction: "On /dashboard (or /dashboard/projects), identify a project connected to an existing GitHub or GitLab repo (as opposed to a greenfield idea project). Preferred: project 314 ttt-rg-87b829. Confirm by checking the project overview page — the Repository field should show a GitHub/GitLab URL. Note the numeric project ID from the URL (/dashboard/projects/:id)."
+    expected: "At least one existing-repo project found with a visible connected repo URL. Record the project ID."
+    evidence:
+      - type: screenshot
+        name: walk-02-project-overview
+
+  - id: navigate-spec-from-repo
+    instruction: "Navigate to ${base_url}/dashboard/projects/:id/spec/from-repo where :id is the numeric ID from the previous step. Wait for networkidle (timeout 30s). Verify the page heading is 'Draft a spec from your codebase' or similar. The page must render the direction textarea (id='spec-from-repo-user-intent') and the submit button ('Read codebase + draft spec')."
+    expected: "Page at /dashboard/projects/:id/spec/from-repo responds HTTP 200. Heading 'Draft a spec from your codebase' visible. Direction textarea present. Submit button present and enabled. No 404/redirect."
+    evidence:
+      - type: screenshot
+        name: walk-03-spec-from-repo-form
+
+  - id: verify-direction-field
+    instruction: "Confirm the direction textarea is present: selector textarea#spec-from-repo-user-intent (or a textarea with placeholder 'Optional. What should your CTO know before drafting?'). Confirm submit button text is 'Read codebase + draft spec'. The field must be optional — leaving it blank must be allowed."
+    expected: "Direction textarea found. Placeholder text matches expected. Submit button found and not disabled."
+    evidence:
+      - type: screenshot
+        name: walk-04-direction-field-visible
+
+  - id: spec-generation-with-direction
+    instruction: "Fill the direction textarea with a meaningful direction string (e.g. 'Focus the spec on the API layer and backend data models. Emphasize the database schema and REST endpoints.'). Click 'Read codebase + draft spec'. Wait for the POST /api/projects/:id/spec/draft-from-repo request to fire. Then wait for one of: (a) a spec draft to render ('Here's what your CTO drafted'); (b) an error state; (c) timeout at 3 minutes. This spawns a real claude -p subprocess — do NOT kill on a short timer. Capture screenshots at t+0, t+30s, and at completion/error."
+    expected: "POST /api/projects/:id/spec/draft-from-repo fires. A loading state 'Your CTO is reading your codebase' appears. Generation completes and renders a spec draft with ## section headers. Draft content reflects the actual codebase (not just boilerplate). If a 5xx occurs, capture the error and surface it — this is a product failure, not a walker failure."
+    evidence:
+      - type: screenshot
+        name: walk-05a-after-click-t0
+      - type: screenshot
+        name: walk-05b-loading-state
+      - type: screenshot
+        name: walk-05c-spec-draft-rendered
+      - type: network-log
+        name: walk-05-spec-gen-network
+      - type: console-log
+        name: walk-05-console
+
+  - id: spec-generation-without-direction
+    instruction: "Navigate back to ${base_url}/dashboard/projects/:id/spec/from-repo. Ensure the direction textarea is empty (clear if needed). Click 'Read codebase + draft spec' (or 'Regenerate' if the draft page shows one). Wait up to 3 minutes. Capture result."
+    expected: "Empty-direction generation also produces a spec draft. Draft reflects the codebase. Accept/Edit/Regenerate buttons appear when draft is ready."
+    evidence:
+      - type: screenshot
+        name: walk-06a-empty-direction-triggered
+      - type: screenshot
+        name: walk-06b-spec-draft-empty-direction
+      - type: network-log
+        name: walk-06-network
+
+  - id: assert-draft-surface
+    instruction: "On the rendered draft page, verify: (1) spec text contains ## section headers; (2) 'Accept', 'Edit', and 'Regenerate' buttons are present; (3) no unhandled error toast or blank content. If the repo has nested files beyond a README, look for evidence the spec reflects sub-directory structure or actual code content."
+    expected: "Spec draft rendered. ## headers present. Three action buttons (Accept, Edit, Regenerate) visible. Content is meaningful (not empty or 'undefined'). Spec accurately reflects the connected repo's codebase."
+    evidence:
+      - type: screenshot
+        name: walk-07-draft-surface-asserted
+
+  - id: cost-storm-check
+    instruction: "Remain idle on the spec-from-repo draft page for 60 seconds. Monitor the network panel for any repeated POST calls to persona, portrait, or other LLM-triggering endpoints that fire without user interaction. This checks for the #653-class cost storm regression."
+    expected: "Zero persona/portrait POST calls during 60s idle. API calls during idle limited to health/subscription/version polling only. No runaway loop."
+    evidence:
+      - type: screenshot
+        name: walk-08-idle-60s
+      - type: network-log
+        name: walk-08-idle-network
+
+result:
+  required_observations:
+    - "Every step has at least one full-page screenshot."
+    - "Steps 5 and 6 have network-log captures showing the POST /api/projects/:id/spec/draft-from-repo call and its HTTP status."
+    - "Step 5 or 6 must confirm a spec draft rendered (not just a loading state)."
+    - "Step 8 confirms zero persona/portrait idle calls."
+    - "Any 5xx from draft-from-repo endpoint is recorded as FAIL with screenshot + network snippet."
+    - "A PASS requires spec content with ## headers and all three action buttons (Accept, Edit, Regenerate)."
+
+recording:
+  mode: cli
+  preferred_formats: ["screenshot", "network-log", "console-log"]
+  driver_note: "samotest CLI does not launch a browser. Use Playwright (available in /home/testuser/samotest/node_modules/playwright) to drive the browser and attach evidence. Credentials come from env vars only — never hardcoded."
