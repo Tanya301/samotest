@@ -1,0 +1,564 @@
+{
+  "url": "https://field-record-1.samo.team",
+  "tag": "v20260606-ux-batch",
+  "timestamp": "2026-06-07T08:01:46.370Z",
+  "results": {
+    "1.login.autofocus": {
+      "status": "PASS",
+      "detail": "focused: #login-username-input",
+      "ts": "2026-06-07T07:59:18.066Z"
+    },
+    "1.login.no-bezel": {
+      "status": "PASS",
+      "detail": "scrollWidth=375",
+      "ts": "2026-06-07T07:59:18.068Z"
+    },
+    "1.login.form-visible": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:18.097Z"
+    },
+    "1.login.success": {
+      "status": "PASS",
+      "detail": "app-shell visible: true",
+      "ts": "2026-06-07T07:59:23.220Z"
+    },
+    "1.home.renders": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Field Record\n        Start ",
+      "ts": "2026-06-07T07:59:23.223Z"
+    },
+    "1.home.nav-items": {
+      "status": "PASS",
+      "detail": "[Home, Fields, Reports, Review, Data, Admin]",
+      "ts": "2026-06-07T07:59:23.224Z"
+    },
+    "1.home.badges": {
+      "status": "PASS",
+      "detail": "14 badges",
+      "ts": "2026-06-07T07:59:23.237Z"
+    },
+    "1.home.my-records-strip": {
+      "status": "SKIP",
+      "detail": "",
+      "ts": "2026-06-07T07:59:23.246Z"
+    },
+    "2.admin.accessible": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Admin\n        Users, fields",
+      "ts": "2026-06-07T07:59:25.182Z"
+    },
+    "2.admin.crop-seasons": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:26.480Z"
+    },
+    "2.admin.irrigation-setup": {
+      "status": "SKIP",
+      "detail": "irr: false",
+      "ts": "2026-06-07T07:59:26.480Z"
+    },
+    "2.admin.field-name-input": {
+      "status": "SKIP",
+      "detail": "Field input not found — may already exist",
+      "ts": "2026-06-07T07:59:26.563Z"
+    },
+    "2.admin.season-created": {
+      "status": "PASS",
+      "detail": "Corn 2026",
+      "ts": "2026-06-07T07:59:28.452Z"
+    },
+    "2.admin.equipment-tab": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:29.333Z"
+    },
+    "2.admin.equipment-added": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:30.479Z"
+    },
+    "2.admin.reload-persists": {
+      "status": "PASS",
+      "detail": "display: ",
+      "ts": "2026-06-07T07:59:33.691Z"
+    },
+    "3.spray.field-loading-state": {
+      "status": "SKIP",
+      "detail": "loading: false",
+      "ts": "2026-06-07T07:59:36.118Z"
+    },
+    "3.spray.field-selected": {
+      "status": "PASS",
+      "detail": "fieldId: 478304fc-010b-4645-9454-ffe6e78caf33",
+      "ts": "2026-06-07T07:59:42.657Z"
+    },
+    "3.spray.acres-zero-validation": {
+      "status": "FAIL",
+      "detail": "error: false",
+      "ts": "2026-06-07T07:59:43.544Z"
+    },
+    "3.spray.acres-filled": {
+      "status": "PASS",
+      "detail": "25.5 acres",
+      "ts": "2026-06-07T07:59:43.632Z"
+    },
+    "3.spray.pattern-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Pattern\n        Store how t",
+      "ts": "2026-06-07T07:59:44.534Z"
+    },
+    "3.spray.pattern-selected": {
+      "status": "PASS",
+      "detail": "6 options",
+      "ts": "2026-06-07T07:59:44.793Z"
+    },
+    "3.spray.tank-mix-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Tank mix\n        Add each p",
+      "ts": "2026-06-07T07:59:45.682Z"
+    },
+    "3.spray.product0-filled": {
+      "status": "PASS",
+      "detail": "name=true",
+      "ts": "2026-06-07T07:59:46.172Z"
+    },
+    "3.spray.longest-rei": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:46.175Z"
+    },
+    "3.spray.product1-added": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:47.041Z"
+    },
+    "3.spray.tank-mix-2products": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:47.081Z"
+    },
+    "3.spray.rup-supervisor-picker": {
+      "status": "SKIP",
+      "detail": "RUP picker: false",
+      "ts": "2026-06-07T07:59:47.084Z"
+    },
+    "3.spray.weather-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Weather and operator\n      ",
+      "ts": "2026-06-07T07:59:48.000Z"
+    },
+    "3.spray.weather-manual": {
+      "status": "PASS",
+      "detail": "temp=true wind=true",
+      "ts": "2026-06-07T07:59:48.254Z"
+    },
+    "3.spray.review-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Review\n        Confirm befo",
+      "ts": "2026-06-07T07:59:49.181Z"
+    },
+    "3.spray.review-rei": {
+      "status": "PASS",
+      "detail": "REI: true",
+      "ts": "2026-06-07T07:59:49.181Z"
+    },
+    "3.spray.review-label-photo": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:49.187Z"
+    },
+    "3.spray.review-proof-photo": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:49.187Z"
+    },
+    "3.spray.saved": {
+      "status": "PASS",
+      "detail": "record ID shown",
+      "ts": "2026-06-07T07:59:53.273Z"
+    },
+    "3.spray.record-id": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:53.273Z"
+    },
+    "3.spray.edit-window": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:53.281Z"
+    },
+    "4.fertilizer.field-step": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:55.766Z"
+    },
+    "4.fertilizer.acres-filled": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T07:59:55.835Z"
+    },
+    "4.fertilizer.field-selected": {
+      "status": "PASS",
+      "detail": "id: 478304fc-010b-4645-9454-ffe6e78caf33",
+      "ts": "2026-06-07T08:00:01.345Z"
+    },
+    "4.fertilizer.pattern-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Pattern\n        Store how t",
+      "ts": "2026-06-07T08:00:02.200Z"
+    },
+    "4.fertilizer.product-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Fertilizer\n        Pick a c",
+      "ts": "2026-06-07T08:00:03.318Z"
+    },
+    "4.fertilizer.product-selected": {
+      "status": "PASS",
+      "detail": "4 products",
+      "ts": "2026-06-07T08:00:03.555Z"
+    },
+    "4.fertilizer.weather-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Weather and operator\n      ",
+      "ts": "2026-06-07T08:00:04.435Z"
+    },
+    "4.fertilizer.review-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Review\n        Confirm befo",
+      "ts": "2026-06-07T08:00:05.303Z"
+    },
+    "4.fertilizer.no-photo-widgets": {
+      "status": "PASS",
+      "detail": "label=false proof=false",
+      "ts": "2026-06-07T08:00:05.306Z"
+    },
+    "4.fertilizer.saved": {
+      "status": "PASS",
+      "detail": "record ID shown",
+      "ts": "2026-06-07T08:00:09.390Z"
+    },
+    "5.tillage.field-step": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:11.798Z"
+    },
+    "5.tillage.field-selected": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:17.307Z"
+    },
+    "5.tillage.pattern-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Pattern\n        Store how t",
+      "ts": "2026-06-07T08:00:18.232Z"
+    },
+    "5.tillage.details-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Tillage details\n        Record the implement, d",
+      "ts": "2026-06-07T08:00:19.334Z"
+    },
+    "5.tillage.no-weather-inputs": {
+      "status": "PASS",
+      "detail": "wx inputs: 0",
+      "ts": "2026-06-07T08:00:19.336Z"
+    },
+    "5.tillage.operator-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Operator and equipment\n    ",
+      "ts": "2026-06-07T08:00:20.199Z"
+    },
+    "5.tillage.operator-no-weather": {
+      "status": "PASS",
+      "detail": "wx inputs: 0",
+      "ts": "2026-06-07T08:00:20.202Z"
+    },
+    "5.tillage.review-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Review\n        Confirm befo",
+      "ts": "2026-06-07T08:00:21.069Z"
+    },
+    "5.tillage.review-no-weather": {
+      "status": "PASS",
+      "detail": "weather row: false",
+      "ts": "2026-06-07T08:00:21.069Z"
+    },
+    "5.tillage.saved": {
+      "status": "PASS",
+      "detail": "record ID",
+      "ts": "2026-06-07T08:00:25.137Z"
+    },
+    "6.office.accessible": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Office review\n        Check",
+      "ts": "2026-06-07T08:00:28.072Z"
+    },
+    "6.office.queue-cards": {
+      "status": "PASS",
+      "detail": "22 cards",
+      "ts": "2026-06-07T08:00:28.110Z"
+    },
+    "6.office.card-field-name": {
+      "status": "PASS",
+      "detail": "Closeout3 Field",
+      "ts": "2026-06-07T08:00:28.113Z"
+    },
+    "6.office.card-operator": {
+      "status": "PASS",
+      "detail": "owner",
+      "ts": "2026-06-07T08:00:28.113Z"
+    },
+    "6.office.card-time": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:28.113Z"
+    },
+    "6.office.card-acres": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:28.113Z"
+    },
+    "6.office.approve-btn": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:29.316Z"
+    },
+    "6.office.approved-section": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:30.850Z"
+    },
+    "6.office.lock-btn": {
+      "status": "PASS",
+      "detail": "clicked",
+      "ts": "2026-06-07T08:00:31.353Z"
+    },
+    "6.office.lock-clicked": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:00:32.382Z"
+    },
+    "6.office.sendback": {
+      "status": "PASS",
+      "detail": "Sent back with reason",
+      "ts": "2026-06-07T08:00:35.986Z"
+    },
+    "7.amend.my-records-loaded": {
+      "status": "PASS",
+      "detail": "chars: 3442",
+      "ts": "2026-06-07T08:00:39.855Z"
+    },
+    "7.amend.my-records-list": {
+      "status": "PASS",
+      "detail": "list present",
+      "ts": "2026-06-07T08:00:39.859Z"
+    },
+    "7.amend.sentback-row": {
+      "status": "PASS",
+      "detail": "recId: ea434e2d-6a37-41b3-ac7f-4b0e9c3543e9 op: tillage",
+      "ts": "2026-06-07T08:00:39.863Z"
+    },
+    "7.amend.saved-step-opens": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Record saved\n        Your tillage record has be",
+      "ts": "2026-06-07T08:00:41.901Z"
+    },
+    "7.amend.sentback-reason-shown": {
+      "status": "PASS",
+      "detail": "Rate on north section needs verification — check notes",
+      "ts": "2026-06-07T08:00:41.902Z"
+    },
+    "7.amend.edit-btn-on-saved-step": {
+      "status": "PASS",
+      "detail": "loadSentBack: ea434e2d-6a37-41b3-ac7f-4b0e9c3543e9",
+      "ts": "2026-06-07T08:00:43.406Z"
+    },
+    "7.amend.wizard-opens": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Tillage record\n        Pick",
+      "ts": "2026-06-07T08:00:45.448Z"
+    },
+    "7.amend.review-step": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Review\n        Confirm befo",
+      "ts": "2026-06-07T08:00:46.484Z"
+    },
+    "7.amend.save": {
+      "status": "PASS",
+      "detail": "\n    \n      \n    \n      \n        Record saved\n        Your t",
+      "ts": "2026-06-07T08:00:48.517Z"
+    },
+    "8.rup.field-selected": {
+      "status": "PASS",
+      "detail": "fid: 478304fc-010b-4645-9454-ffe6e78caf33",
+      "ts": "2026-06-07T08:00:54.397Z"
+    },
+    "8.rup.tank-mix-step": {
+      "status": "FAIL",
+      "detail": "epa input: false",
+      "ts": "2026-06-07T08:00:56.812Z"
+    },
+    "8.rup": {
+      "status": "SKIP",
+      "detail": "EPA input not found at product step",
+      "ts": "2026-06-07T08:00:56.812Z"
+    },
+    "10.truth.Scouting-preview": {
+      "status": "PASS",
+      "detail": "notice: true",
+      "ts": "2026-06-07T08:00:58.194Z"
+    },
+    "10.truth.Harvest-preview": {
+      "status": "PASS",
+      "detail": "notice: true",
+      "ts": "2026-06-07T08:00:59.533Z"
+    },
+    "10.truth.Loads-preview": {
+      "status": "PASS",
+      "detail": "notice: true",
+      "ts": "2026-06-07T08:01:00.889Z"
+    },
+    "10.truth.Reports-preview": {
+      "status": "PASS",
+      "detail": "notice: true",
+      "ts": "2026-06-07T08:01:02.687Z"
+    },
+    "10.truth.Spray-no-preview": {
+      "status": "PASS",
+      "detail": "preview: false",
+      "ts": "2026-06-07T08:01:03.331Z"
+    },
+    "10.truth.Fertilizer-no-preview": {
+      "status": "PASS",
+      "detail": "preview: false",
+      "ts": "2026-06-07T08:01:03.965Z"
+    },
+    "10.truth.Tillage-no-preview": {
+      "status": "PASS",
+      "detail": "preview: false",
+      "ts": "2026-06-07T08:01:04.597Z"
+    },
+    "9.signout.owner": {
+      "status": "PASS",
+      "detail": "login visible: true",
+      "ts": "2026-06-07T08:01:09.080Z"
+    },
+    "9.walkop.login": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:01:16.200Z"
+    },
+    "9.walkop.no-admin-nav": {
+      "status": "PASS",
+      "detail": "admin nav visible: false",
+      "ts": "2026-06-07T08:01:16.202Z"
+    },
+    "9.walkop.no-review-nav": {
+      "status": "PASS",
+      "detail": "review nav visible: false",
+      "ts": "2026-06-07T08:01:16.203Z"
+    },
+    "9.walkop.admin-blocked": {
+      "status": "PASS",
+      "detail": "no-access: true",
+      "ts": "2026-06-07T08:01:16.737Z"
+    },
+    "9.walkop.office-blocked": {
+      "status": "PASS",
+      "detail": "review-no-access: true",
+      "ts": "2026-06-07T08:01:17.263Z"
+    },
+    "9.throttle.5wrong-msg": {
+      "status": "PASS",
+      "detail": "Invalid login or password",
+      "ts": "2026-06-07T08:01:28.227Z"
+    },
+    "9.throttle.correct-succeeds": {
+      "status": "FAIL",
+      "detail": "",
+      "ts": "2026-06-07T08:01:31.293Z"
+    },
+    "11.desktop.home": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:01:41.566Z"
+    },
+    "11.desktop.side-rail": {
+      "status": "PASS",
+      "detail": "side rail: true",
+      "ts": "2026-06-07T08:01:41.567Z"
+    },
+    "11.desktop.queue": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:01:43.955Z"
+    },
+    "11.desktop.spray": {
+      "status": "PASS",
+      "detail": "",
+      "ts": "2026-06-07T08:01:46.370Z"
+    },
+    "12.console-errors": {
+      "status": "WARN",
+      "detail": "12 errors",
+      "ts": "2026-06-07T08:01:46.370Z"
+    },
+    "12.network-anomalies": {
+      "status": "PASS",
+      "detail": "0 anomalies",
+      "ts": "2026-06-07T08:01:46.370Z"
+    }
+  },
+  "consoleErrors": [
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 429 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    },
+    {
+      "url": "/",
+      "msg": "Failed to load resource: the server responded with a status of 401 ()"
+    }
+  ],
+  "networkAnomalies": [],
+  "screenshotCount": 68
+}
