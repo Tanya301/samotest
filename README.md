@@ -103,8 +103,8 @@ never write secret values into the repo, scenarios, or PR/issue bodies.
    - `RELEASE_GATE_TEST_EMAIL`
    - `RELEASE_GATE_TEST_PASSWORD`
 
-   (For the samo fixture, the maya@postgres.ai account file is referenced by
-   env-var name elsewhere; never inline the password.)
+   Never inline the email or password — reference them only by `${env.NAME}` and
+   keep the values in the environment.
 8. **Provider token for posting evidence** (only for `evidence upload` without
    `--dry-run`):
    - GitHub PRs: `GITHUB_TOKEN` **or** an authenticated `gh` CLI (`gh auth status`
